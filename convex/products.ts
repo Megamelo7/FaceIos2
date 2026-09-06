@@ -164,13 +164,18 @@ export const create = mutation({
     featured: v.optional(v.boolean()),
     images: imagesValidator,
     description: v.optional(v.string()),
+    // Datos opcionales de la compra inicial (cuando se carga desde Movimientos → Compra).
+    paymentMethod: v.optional(v.string()),
+    purchaseDate: v.optional(v.number()),
+    purchaseNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
+    const { paymentMethod, purchaseDate, purchaseNotes, ...productFields } = args;
     const status = args.status ?? (args.quantity > 0 ? "disponible" : "agotado");
     const id = await ctx.db.insert("products", {
-      ...args,
+      ...productFields,
       status,
       createdAt: now,
       updatedAt: now,
@@ -186,8 +191,9 @@ export const create = mutation({
         quantity: args.quantity,
         unitCost: args.costPrice,
         amount: args.costPrice * args.quantity,
-        notes: "Stock inicial",
-        date: now,
+        paymentMethod,
+        notes: purchaseNotes?.trim() || "Stock inicial",
+        date: purchaseDate ?? now,
         createdBy: userId,
         createdAt: now,
       });

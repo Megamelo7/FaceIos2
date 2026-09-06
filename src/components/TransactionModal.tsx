@@ -15,9 +15,17 @@ type Props = {
   type: TxType;
   /** Producto preseleccionado (p. ej. "Ingresar stock" desde la tabla de Stock). */
   initialProductId?: Id<"products">;
+  /** En Compra: permite cargar un producto NUEVO con todos los combos. */
+  onCreateNewProduct?: () => void;
 };
 
-export default function TransactionModal({ open, onClose, type, initialProductId }: Props) {
+export default function TransactionModal({
+  open,
+  onClose,
+  type,
+  initialProductId,
+  onCreateNewProduct,
+}: Props) {
   const products = useQuery(api.products.list, open ? {} : "skip");
   const recordSale = useMutation(api.transactions.recordSale);
   const recordPurchase = useMutation(api.transactions.recordPurchase);
@@ -48,6 +56,10 @@ export default function TransactionModal({ open, onClose, type, initialProductId
   );
 
   function onSelectProduct(id: string) {
+    if (id === "__new__") {
+      onCreateNewProduct?.();
+      return;
+    }
     setProductId(id);
     const p = products?.find((x) => x._id === id);
     if (p) setUnitValue(isSale ? p.salePrice.toString() : p.costPrice.toString());
@@ -157,13 +169,23 @@ export default function TransactionModal({ open, onClose, type, initialProductId
 
         {isProductTx ? (
           <>
-            <Field label="Producto">
+            <Field
+              label="Producto"
+              hint={
+                isPurchase && onCreateNewProduct
+                  ? "¿No está en la lista? Elegí “Producto nuevo” para cargarlo con todos los combos (modelo, color, capacidad…)."
+                  : undefined
+              }
+            >
               <select
                 className="input"
                 value={productId}
                 onChange={(e) => onSelectProduct(e.target.value)}
               >
                 <option value="">— Elegí un producto —</option>
+                {isPurchase && onCreateNewProduct && (
+                  <option value="__new__">＋ Producto nuevo (cargar con combos)…</option>
+                )}
                 {products?.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.name}

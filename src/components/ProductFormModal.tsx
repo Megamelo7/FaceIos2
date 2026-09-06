@@ -15,7 +15,9 @@ import {
   Condition,
   ProductStatus,
   BatteryType,
+  PAYMENT_METHODS,
 } from "../lib/categories";
+import { toDateInputValue, fromDateInputValue } from "../lib/format";
 import { Loader2 } from "lucide-react";
 
 /** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
@@ -25,6 +27,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   product?: ProductWithImages | null;
+  /** "purchase": alta desde Movimientos → Compra (pide medio de pago y fecha). */
+  mode?: "purchase";
 };
 
 const CUSTOM = "__custom__";
@@ -33,11 +37,12 @@ const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
 /** Categorías de equipos con almacenamiento, batería e IMEI/serie. */
 const DEVICE_CATS: Category[] = ["iphone", "ipad", "notebook"];
 
-export default function ProductFormModal({ open, onClose, product }: Props) {
+export default function ProductFormModal({ open, onClose, product, mode }: Props) {
   const create = useMutation(api.products.create);
   const update = useMutation(api.products.update);
   const catalog = useQuery(api.catalog.list, {}) ?? [];
   const isEdit = !!product;
+  const isPurchase = mode === "purchase" && !isEdit;
 
   const [form, setForm] = useState(() => ({
     name: product?.name ?? "",
@@ -64,6 +69,9 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
   }));
   // "Otro / escribir a mano" elegido explícitamente en cada combo.
   const [forceCustom, setForceCustom] = useState({ model: false, color: false, storage: false });
+  // Datos de la compra (sólo en modo compra).
+  const [payment, setPayment] = useState("Efectivo");
+  const [purchaseDate, setPurchaseDate] = useState(toDateInputValue(Date.now()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +180,13 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
         // El stock no se edita acá: sólo cambia desde Movimientos.
         await update({ id: product._id, ...payload });
       } else {
-        await create({ ...payload, quantity: Number(form.quantity) || 0 });
+        await create({
+          ...payload,
+          quantity: Number(form.quantity) || 0,
+          ...(isPurchase
+            ? { paymentMethod: payment, purchaseDate: fromDateInputValue(purchaseDate) }
+            : {}),
+        });
       }
       onClose();
     } catch (err) {
@@ -199,7 +213,7 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
       open={open}
       onClose={onClose}
       size="lg"
-      title={isEdit ? "Editar producto" : "Nuevo producto"}
+      title={isEdit ? "Editar producto" : isPurchase ? "Compra: producto nuevo" : "Nuevo producto"}
       footer={
         <>
           <button className="btn-secondary" onClick={onClose} type="button">
@@ -207,7 +221,7 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
           </button>
           <button className="btn-primary" onClick={onSubmit} disabled={saving} type="button">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar cambios" : "Crear producto"}
+            {isEdit ? "Guardar cambios" : isPurchase ? "Registrar compra" : "Crear producto"}
           </button>
         </>
       }
@@ -455,7 +469,10 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
               </div>
             </Field>
           ) : (
-            <Field label="Stock inicial" hint="Queda registrado como una Compra en Movimientos.">
+            <Field
+              label={isPurchase ? "Cantidad comprada" : "Stock inicial"}
+              hint="Queda registrado como una Compra en Movimientos."
+            >
               <input
                 className="input"
                 type="number"
@@ -489,6 +506,38 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
             </select>
           </Field>
         </div>
+
+        {/* Datos de la compra (sólo desde Movimientos → Compra) */}
+        {isPurchase && (
+          <div className="rounded-2xl bg-orange-50 p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-orange-700">
+              Datos de la compra
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Medio de pago">
+                <select
+                  className="input"
+                  value={payment}
+                  onChange={(e) => setPayment(e.target.value)}
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Fecha de compra">
+                <input
+                  className="input"
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
 
         {/* Fotos */}
         <Field

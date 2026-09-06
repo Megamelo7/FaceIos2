@@ -4,6 +4,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
 import TransactionModal from "../../components/TransactionModal";
+import ProductFormModal from "../../components/ProductFormModal";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
@@ -29,6 +30,8 @@ export default function Movements() {
   const [modalType, setModalType] = useState<TxType | null>(null);
   const [toDelete, setToDelete] = useState<Id<"transactions"> | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Compra de un producto NUEVO: abre el formulario de producto con todos los combos.
+  const [newProductOpen, setNewProductOpen] = useState(false);
 
   const txs = useQuery(api.transactions.list, {
     type: filter === "all" ? undefined : filter,
@@ -213,7 +216,19 @@ export default function Movements() {
           open={!!modalType}
           type={modalType}
           onClose={() => setModalType(null)}
+          onCreateNewProduct={
+            modalType === "compra"
+              ? () => {
+                  setModalType(null);
+                  setNewProductOpen(true);
+                }
+              : undefined
+          }
         />
+      )}
+
+      {newProductOpen && (
+        <ProductFormModal open mode="purchase" onClose={() => setNewProductOpen(false)} />
       )}
 
       <Modal
