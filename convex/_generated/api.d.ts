@@ -15,6 +15,7 @@ import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
 import type * as finances from "../finances.js";
 import type * as http from "../http.js";
+import type * as maintenance from "../maintenance.js";
 import type * as products from "../products.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   finances: typeof finances;
   http: typeof http;
+  maintenance: typeof maintenance;
   products: typeof products;
   seed: typeof seed;
   settings: typeof settings;
