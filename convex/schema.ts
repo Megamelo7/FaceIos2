@@ -38,6 +38,16 @@ export default defineSchema({
       v.union(v.literal("original"), v.literal("reacondicionada")),
     ),
     imei: v.optional(v.string()),
+    // Resultado de la consulta oficial del IMEI en ENACOM (se guarda con el artículo).
+    imeiCheck: v.optional(
+      v.object({
+        status: v.union(v.literal("valido"), v.literal("bloqueado"), v.literal("error")),
+        title: v.string(),
+        message: v.string(),
+        gsma: v.optional(v.string()),
+        checkedAt: v.number(),
+      }),
+    ),
     costPrice: v.number(),
     salePrice: v.number(),
     quantity: v.number(),

@@ -40,6 +40,17 @@ const batteryTypeValidator = v.union(
 
 const imagesValidator = v.optional(v.array(v.id("_storage")));
 
+/** Resultado de la consulta de IMEI en ENACOM (ver convex/enacom.ts). */
+const imeiCheckValidator = v.optional(
+  v.object({
+    status: v.union(v.literal("valido"), v.literal("bloqueado"), v.literal("error")),
+    title: v.string(),
+    message: v.string(),
+    gsma: v.optional(v.string()),
+    checkedAt: v.number(),
+  }),
+);
+
 /**
  * Resuelve las URLs de las fotos guardadas en Convex Storage.
  * Devuelve un array alineado con `images` ("" si alguna no existe).
@@ -156,6 +167,7 @@ export const create = mutation({
     batteryHealth: v.optional(v.number()),
     batteryType: v.optional(batteryTypeValidator),
     imei: v.optional(v.string()),
+    imeiCheck: imeiCheckValidator,
     costPrice: v.number(),
     salePrice: v.number(),
     quantity: v.number(),
@@ -215,6 +227,7 @@ export const update = mutation({
     batteryHealth: v.optional(v.number()),
     batteryType: v.optional(batteryTypeValidator),
     imei: v.optional(v.string()),
+    imeiCheck: imeiCheckValidator,
     costPrice: v.optional(v.number()),
     salePrice: v.optional(v.number()),
     // `quantity` NO se edita acá: el stock sólo cambia desde Movimientos.
@@ -242,6 +255,11 @@ export const update = mutation({
     const patch: Partial<Doc<"products">> = { updatedAt: Date.now() };
     for (const [key, value] of Object.entries(rest)) {
       if (value !== undefined) (patch as Record<string, unknown>)[key] = value;
+    }
+    // Si se envía el IMEI sin consulta asociada, se descarta la consulta anterior
+    // (el IMEI cambió o se borró): no puede quedar un resultado de otro número.
+    if (args.imei !== undefined && args.imeiCheck === undefined) {
+      (patch as Record<string, unknown>).imeiCheck = undefined;
     }
     await ctx.db.patch(id, patch);
     return id;

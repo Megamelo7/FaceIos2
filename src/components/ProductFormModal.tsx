@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
@@ -17,11 +18,14 @@ import {
   BatteryType,
   PAYMENT_METHODS,
 } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue } from "../lib/format";
-import { Loader2 } from "lucide-react";
+import { toDateInputValue, fromDateInputValue, formatDateTime } from "../lib/format";
+import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
 
 /** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
 export type ProductWithImages = Doc<"products"> & { imageUrls: string[] };
+
+/** Resultado guardado de la consulta de IMEI en ENACOM. */
+type ImeiCheck = NonNullable<Doc<"products">["imeiCheck"]>;
 
 type Props = {
   open: boolean;
@@ -41,6 +45,7 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   const create = useMutation(api.products.create);
   const update = useMutation(api.products.update);
   const catalog = useQuery(api.catalog.list, {}) ?? [];
+  const checkImei = useAction(api.enacom.checkImei);
   const isEdit = !!product;
   const isPurchase = mode === "purchase" && !isEdit;
 
@@ -55,6 +60,7 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
     batteryHealth: product?.batteryHealth?.toString() ?? "",
     batteryType: (product?.batteryType ?? "") as "" | BatteryType,
     imei: product?.imei ?? "",
+    imeiCheck: (product?.imeiCheck ?? null) as ImeiCheck | null,
     costPrice: product?.costPrice?.toString() ?? "",
     salePrice: product?.salePrice?.toString() ?? "",
     quantity: product?.quantity?.toString() ?? "1",
@@ -72,6 +78,9 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   // Datos de la compra (sólo en modo compra).
   const [payment, setPayment] = useState("Efectivo");
   const [purchaseDate, setPurchaseDate] = useState(toDateInputValue(Date.now()));
+  // Consulta de IMEI en ENACOM.
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +111,28 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   // Almacenamiento: equipos siempre; AirPods sólo si el modelo lo define.
   const showStorageField = isDevice || (isCatalog && storageOptions.length > 0);
   const serialLabel = form.category === "notebook" ? "Número de serie" : "IMEI / Serie";
+  // ENACOM sólo verifica IMEI (iPhone / iPad); las notebooks usan número de serie.
+  const canCheckImei = form.category !== "notebook";
+  const imeiDigits = form.imei.replace(/\D/g, "");
+
+  async function checkImeiNow() {
+    setCheckError(null);
+    setChecking(true);
+    try {
+      const r = await checkImei({ imei: form.imei });
+      set("imeiCheck", {
+        status: r.status,
+        title: r.title,
+        message: r.message,
+        gsma: r.gsma,
+        checkedAt: r.checkedAt,
+      });
+    } catch (err) {
+      setCheckError(err instanceof ConvexError ? String(err.data) : "No se pudo consultar ENACOM.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   function onChangeCategory(category: Category) {
     setForm((f) => ({ ...f, category, model: "", color: "", storage: "" }));
@@ -168,6 +199,7 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
         batteryHealth: num(form.batteryHealth),
         batteryType: form.batteryType || undefined,
         imei: form.imei.trim() || undefined,
+        imeiCheck: form.imeiCheck ?? undefined,
         costPrice: Number(form.costPrice),
         salePrice: Number(form.salePrice),
         minStock: num(form.minStock),
@@ -411,12 +443,74 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                 </select>
               </Field>
               <Field label={serialLabel} className="sm:col-span-2">
-                <input
-                  className="input"
-                  value={form.imei}
-                  onChange={(e) => set("imei", e.target.value)}
-                  placeholder="Opcional"
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="input"
+                    value={form.imei}
+                    onChange={(e) => {
+                      set("imei", e.target.value);
+                      // Cambió el número: la consulta anterior ya no aplica.
+                      set("imeiCheck", null);
+                      setCheckError(null);
+                    }}
+                    placeholder={canCheckImei ? "15 dígitos · marcá *#06# en el equipo" : "Opcional"}
+                    inputMode="numeric"
+                  />
+                  {canCheckImei && (
+                    <button
+                      type="button"
+                      className="btn-secondary shrink-0"
+                      onClick={checkImeiNow}
+                      disabled={checking || imeiDigits.length < 14}
+                      title="Consulta oficial en imei.enacom.gob.ar"
+                    >
+                      {checking ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="h-4 w-4" />
+                      )}
+                      Consultar ENACOM
+                    </button>
+                  )}
+                </div>
+                {checkError && <p className="mt-1.5 text-xs text-red-600">{checkError}</p>}
+                {form.imeiCheck && (
+                  <div
+                    className={`mt-2 rounded-xl px-3.5 py-2.5 text-sm ${
+                      form.imeiCheck.status === "bloqueado"
+                        ? "bg-red-50 text-red-800"
+                        : form.imeiCheck.status === "valido"
+                          ? "bg-emerald-50 text-emerald-800"
+                          : "bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    <p className="flex items-center gap-1.5 font-semibold">
+                      {form.imeiCheck.status === "bloqueado" ? (
+                        <ShieldAlert className="h-4 w-4" />
+                      ) : form.imeiCheck.status === "valido" ? (
+                        <ShieldCheck className="h-4 w-4" />
+                      ) : (
+                        <ShieldQuestion className="h-4 w-4" />
+                      )}
+                      {form.imeiCheck.title}
+                    </p>
+                    <p className="mt-0.5 text-xs opacity-90">
+                      {form.imeiCheck.message}
+                      {form.imeiCheck.gsma ? ` · ${form.imeiCheck.gsma}` : ""}
+                    </p>
+                    <p className="mt-1 text-[11px] opacity-70">
+                      Fuente: ENACOM · {formatDateTime(form.imeiCheck.checkedAt)} ·{" "}
+                      <a
+                        href="https://imei.enacom.gob.ar/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        ver en ENACOM
+                      </a>
+                    </p>
+                  </div>
+                )}
               </Field>
             </>
           )}

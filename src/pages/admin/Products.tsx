@@ -22,6 +22,8 @@ import {
   PackagePlus,
   Star,
   Loader2,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 
 /** Fila tal como la devuelve `api.products.list` (con URLs de fotos resueltas). */
@@ -155,6 +157,16 @@ export default function Products() {
                             <p className="flex items-center gap-1.5 font-medium text-ink-900">
                               {p.name}
                               {p.featured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
+                              {p.imeiCheck?.status === "bloqueado" && (
+                                <span title={`ENACOM: ${p.imeiCheck.title} — ${p.imeiCheck.message}`}>
+                                  <ShieldAlert className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              {p.imeiCheck?.status === "valido" && (
+                                <span title={`ENACOM: ${p.imeiCheck.title} — ${p.imeiCheck.message}`}>
+                                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                                </span>
+                              )}
                             </p>
                             {subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>}
                           </div>
