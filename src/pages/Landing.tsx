@@ -10,7 +10,6 @@ import {
   Condition,
 } from "../lib/categories";
 import {
-  Smartphone,
   ShieldCheck,
   Truck,
   BadgeCheck,
@@ -72,11 +71,8 @@ export default function Landing() {
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/80 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-          <a href="#top" className="flex items-center gap-2 font-bold">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-white">
-              <Smartphone className="h-5 w-5" />
-            </span>
-            {storeName}
+          <a href="#top" className="flex items-center" aria-label={storeName}>
+            <img src="/logo.png" alt={storeName} className="h-10 w-auto" />
           </a>
           <nav className="hidden items-center gap-7 text-sm font-medium text-ink-600 md:flex">
             <a href="#catalogo" className="hover:text-ink-900">Catálogo</a>
@@ -107,23 +103,22 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section id="top" className="relative overflow-hidden bg-ink-950 text-white">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-60"
-          style={{
-            background:
-              "radial-gradient(700px circle at 25% 15%, rgba(99,102,241,.35), transparent 55%), radial-gradient(600px circle at 80% 60%, rgba(139,92,246,.22), transparent 55%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-6xl px-5 py-24 text-center sm:py-32">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-ink-200">
-            <BadgeCheck className="h-4 w-4 text-brand-300" /> Equipos con garantía
+      <section id="top" className="relative overflow-hidden bg-white">
+        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-6 text-center sm:pb-24 sm:pt-10">
+          {/* El logo ES el hero: grande, sobre fondo blanco. */}
+          <img
+            src="/logo.png"
+            alt={storeName}
+            className="mx-auto w-full max-w-2xl sm:max-w-3xl"
+          />
+          <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-ink-200 bg-ink-50 px-4 py-1.5 text-xs font-medium text-ink-700">
+            <BadgeCheck className="h-4 w-4 text-brand-600" /> Equipos con garantía
           </span>
-          <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-6xl">
+          <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold leading-tight tracking-tight text-ink-900 sm:text-5xl">
             {heroTitle}
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-ink-300">{heroSubtitle}</p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <p className="mx-auto mt-4 max-w-xl text-lg text-ink-600">{heroSubtitle}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a href="#catalogo" className="btn-primary px-6 py-3 text-base">
               Ver catálogo <ChevronRight className="h-4 w-4" />
             </a>
@@ -132,7 +127,7 @@ export default function Landing() {
                 href={waLink(whatsapp, `Hola ${storeName}! Quería consultar precios y disponibilidad.`)}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-secondary px-6 py-3 text-base"
+                className="btn-dark px-6 py-3 text-base"
               >
                 <MessageCircle className="h-4 w-4" /> Consultar por WhatsApp
               </a>
@@ -241,9 +236,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-ink-100 bg-white">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-ink-500 sm:flex-row">
-          <p className="flex items-center gap-2 font-semibold text-ink-700">
-            <Smartphone className="h-4 w-4" /> {storeName}
-          </p>
+          <img src="/logo.png" alt={storeName} className="h-8 w-auto" />
           <p>© {new Date().getFullYear()} · Todos los derechos reservados</p>
           <Link to="/login" className="hover:text-ink-800">Acceso al panel</Link>
         </div>

@@ -15,7 +15,6 @@ import {
   LogOut,
   Menu,
   X,
-  Smartphone,
   ExternalLink,
 } from "lucide-react";
 
@@ -51,14 +50,11 @@ export default function AdminLayout() {
 
   const SidebarContent = (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
-          <Smartphone className="h-5 w-5" />
+      <div className="px-5 py-5">
+        <div className="w-fit rounded-xl bg-white px-3 py-2">
+          <img src="/logo.png" alt={storeName} className="h-9 w-auto" />
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-white">{storeName}</p>
-          <p className="text-xs text-ink-500">Panel de gestión</p>
-        </div>
+        <p className="mt-2 truncate text-xs text-ink-500">Panel de gestión · {storeName}</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-3">

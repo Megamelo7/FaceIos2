@@ -4,7 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery, useAction } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
-import { Smartphone, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { Field } from "../components/ui";
 import PasswordInput from "../components/PasswordInput";
 
@@ -57,11 +57,8 @@ export default function Login() {
               "radial-gradient(600px circle at 20% 20%, rgba(99,102,241,.35), transparent 60%), radial-gradient(500px circle at 80% 70%, rgba(139,92,246,.25), transparent 55%)",
           }}
         />
-        <Link to="/" className="relative flex items-center gap-2 font-semibold">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
-            <Smartphone className="h-5 w-5" />
-          </div>
-          FaceIos2
+        <Link to="/" className="relative inline-flex w-fit rounded-2xl bg-white px-4 py-2.5 shadow-card-lg">
+          <img src="/logo.png" alt="FaceIos2" className="h-12 w-auto" />
         </Link>
         <div className="relative">
           <h1 className="text-3xl font-bold leading-tight">Panel de gestión</h1>
@@ -79,9 +76,7 @@ export default function Login() {
       <div className="flex w-full flex-col items-center justify-center px-6 lg:w-1/2">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-ink-900 text-white">
-              <Smartphone className="h-6 w-6" />
-            </div>
+            <img src="/logo.png" alt="FaceIos2" className="h-14 w-auto" />
           </div>
 
           {needsBootstrap ? (
