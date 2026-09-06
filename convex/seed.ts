@@ -18,6 +18,7 @@ export const run = mutation({
     if (args.force) {
       for (const p of await ctx.db.query("products").collect()) await ctx.db.delete(p._id);
       for (const t of await ctx.db.query("transactions").collect()) await ctx.db.delete(t._id);
+      for (const c of await ctx.db.query("customers").collect()) await ctx.db.delete(c._id);
     }
 
     const now = Date.now();
@@ -143,6 +144,20 @@ export const run = mutation({
       { name: "Funda silicona iPhone 15", qty: 4, price: 15000, daysAgo: 70, pay: "Efectivo" },
     ];
 
+    // Clientes de ejemplo (uno por cada venta con nombre).
+    const customerIds: Record<string, Id<"customers">> = {};
+    const clientes = Array.from(
+      new Set(ventas.map((v) => v.cliente).filter((c): c is string => !!c)),
+    );
+    for (const [i, cliente] of clientes.entries()) {
+      customerIds[cliente] = await ctx.db.insert("customers", {
+        name: cliente,
+        phone: `5491150000${100 + i}`,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     for (const venta of ventas) {
       const productId = ids[venta.name];
       const product = await ctx.db.get(productId);
@@ -165,6 +180,7 @@ export const run = mutation({
         amount: venta.price * venta.qty,
         profit: (venta.price - unitCost) * venta.qty,
         paymentMethod: venta.pay,
+        customerId: venta.cliente ? customerIds[venta.cliente] : undefined,
         customerName: venta.cliente,
         date: now - venta.daysAgo * day,
         createdAt: now,

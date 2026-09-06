@@ -76,6 +76,8 @@ export default defineSchema({
     // Ganancia neta de la operación (para ventas): (precio - costo) * cantidad.
     profit: v.optional(v.number()),
     paymentMethod: v.optional(v.string()),
+    // Cliente vinculado (opcional) + snapshot de nombre/contacto para el historial.
+    customerId: v.optional(v.id("customers")),
     customerName: v.optional(v.string()),
     customerContact: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -84,7 +86,20 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_type", ["type"])
-    .index("by_date", ["date"]),
+    .index("by_date", ["date"])
+    .index("by_customer", ["customerId"]),
+
+  /** Clientes: datos básicos para asociar a las ventas. */
+  customers: defineTable({
+    name: v.string(),
+    phone: v.optional(v.string()),
+    email: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_phone", ["phone"])
+    .index("by_email", ["email"]),
 
   /**
    * Catálogo de modelos (configuración): modelo + colores + capacidades
