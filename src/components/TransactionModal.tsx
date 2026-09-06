@@ -55,6 +55,10 @@ export default function TransactionModal({
     [products, productId],
   );
 
+  // En una VENTA sólo se pueden elegir artículos previamente ingresados con stock.
+  const selectable = isSale ? products?.filter((p) => p.quantity > 0) : products;
+  const noStock = isSale && selectable !== undefined && selectable.length === 0;
+
   function onSelectProduct(id: string) {
     if (id === "__new__") {
       onCreateNewProduct?.();
@@ -170,11 +174,13 @@ export default function TransactionModal({
         {isProductTx ? (
           <>
             <Field
-              label="Producto"
+              label={isSale ? "Producto (sólo con stock)" : "Producto"}
               hint={
                 isPurchase && onCreateNewProduct
                   ? "¿No está en la lista? Elegí “Producto nuevo” para cargarlo con todos los combos (modelo, color, capacidad…)."
-                  : undefined
+                  : noStock
+                    ? "No hay artículos con stock. Registrá una Compra primero."
+                    : undefined
               }
             >
               <select
@@ -186,7 +192,7 @@ export default function TransactionModal({
                 {isPurchase && onCreateNewProduct && (
                   <option value="__new__">＋ Producto nuevo (cargar con combos)…</option>
                 )}
-                {products?.map((p) => (
+                {selectable?.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.name}
                     {p.storage ? ` ${p.storage}` : ""} · stock: {p.quantity}

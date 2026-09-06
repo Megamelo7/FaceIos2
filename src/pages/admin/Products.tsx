@@ -78,7 +78,7 @@ export default function Products() {
         </div>
         <button className="btn-primary shrink-0" onClick={openNew}>
           <Plus className="h-4 w-4" />
-          Nuevo producto
+          Nuevo producto (compra)
         </button>
       </div>
 
@@ -105,10 +105,10 @@ export default function Products() {
         <EmptyState
           icon={Package}
           title="No hay productos"
-          description="Agregá tu primer iPhone o accesorio para empezar a controlar el stock."
+          description="Todo artículo entra por una Compra: cargá el primero para empezar a controlar el stock."
           action={
             <button className="btn-primary" onClick={openNew}>
-              <Plus className="h-4 w-4" /> Nuevo producto
+              <Plus className="h-4 w-4" /> Nuevo producto (compra)
             </button>
           }
         />
@@ -233,6 +233,8 @@ export default function Products() {
           open={formOpen}
           onClose={() => setFormOpen(false)}
           product={editing}
+          // Todo artículo nuevo entra por una Compra (misma lógica que Movimientos).
+          mode={editing ? undefined : "purchase"}
         />
       )}
 
