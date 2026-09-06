@@ -51,6 +51,8 @@ export default defineSchema({
     featured: v.optional(v.boolean()),
     // Fotos del producto, guardadas en Convex Storage (la primera es la principal).
     images: v.optional(v.array(v.id("_storage"))),
+    // Legacy: URL de imagen del formulario anterior (ya no se usa, se conserva por compatibilidad).
+    imageUrl: v.optional(v.string()),
     description: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
