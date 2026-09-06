@@ -62,7 +62,7 @@ export const STATUSES: Record<ProductStatus, { label: string; color: string }> =
 
 export const TX_META: Record<TxType, { label: string; color: string; sign: 1 | -1 }> = {
   venta: { label: "Venta", color: "bg-emerald-50 text-emerald-700", sign: 1 },
-  ingreso: { label: "Ingreso", color: "bg-sky-50 text-sky-700", sign: 1 },
+  ingreso: { label: "Otro ingreso", color: "bg-sky-50 text-sky-700", sign: 1 },
   compra: { label: "Compra", color: "bg-orange-50 text-orange-700", sign: -1 },
   gasto: { label: "Gasto", color: "bg-red-50 text-red-700", sign: -1 },
 };

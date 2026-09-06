@@ -166,15 +166,33 @@ export const create = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    const userId = await requireAuth(ctx);
     const now = Date.now();
     const status = args.status ?? (args.quantity > 0 ? "disponible" : "agotado");
-    return await ctx.db.insert("products", {
+    const id = await ctx.db.insert("products", {
       ...args,
       status,
       createdAt: now,
       updatedAt: now,
     });
+    // El stock inicial queda registrado como una COMPRA en Movimientos:
+    // todo el stock tiene su movimiento de ingreso (Compra suma, Venta resta).
+    if (args.quantity > 0) {
+      await ctx.db.insert("transactions", {
+        type: "compra",
+        productId: id,
+        productName: args.name,
+        category: args.category,
+        quantity: args.quantity,
+        unitCost: args.costPrice,
+        amount: args.costPrice * args.quantity,
+        notes: "Stock inicial",
+        date: now,
+        createdBy: userId,
+        createdAt: now,
+      });
+    }
+    return id;
   },
 });
 
@@ -193,7 +211,7 @@ export const update = mutation({
     imei: v.optional(v.string()),
     costPrice: v.optional(v.number()),
     salePrice: v.optional(v.number()),
-    quantity: v.optional(v.number()),
+    // `quantity` NO se edita acá: el stock sólo cambia desde Movimientos.
     minStock: v.optional(v.number()),
     status: v.optional(statusValidator),
     featured: v.optional(v.boolean()),

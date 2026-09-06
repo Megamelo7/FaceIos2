@@ -1,6 +1,7 @@
-import { useState, FormEvent, useMemo } from "react";
+import { useState, FormEvent, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
 import CustomerPicker, { CustomerSelection } from "./CustomerPicker";
 import { TX_META, TxType, PAYMENT_METHODS } from "../lib/categories";
@@ -12,9 +13,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   type: TxType;
+  /** Producto preseleccionado (p. ej. "Ingresar stock" desde la tabla de Stock). */
+  initialProductId?: Id<"products">;
 };
 
-export default function TransactionModal({ open, onClose, type }: Props) {
+export default function TransactionModal({ open, onClose, type, initialProductId }: Props) {
   const products = useQuery(api.products.list, open ? {} : "skip");
   const recordSale = useMutation(api.transactions.recordSale);
   const recordPurchase = useMutation(api.transactions.recordPurchase);
@@ -49,6 +52,18 @@ export default function TransactionModal({ open, onClose, type }: Props) {
     const p = products?.find((x) => x._id === id);
     if (p) setUnitValue(isSale ? p.salePrice.toString() : p.costPrice.toString());
   }
+
+  // Preseleccionar el producto cuando la lista termina de cargar.
+  useEffect(() => {
+    if (initialProductId && products && productId === "") {
+      const p = products.find((x) => x._id === initialProductId);
+      if (p) {
+        setProductId(p._id);
+        setUnitValue(isSale ? p.salePrice.toString() : p.costPrice.toString());
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProductId, products]);
 
   const total = isProductTx
     ? (Number(quantity) || 0) * (Number(unitValue) || 0)

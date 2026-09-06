@@ -4,6 +4,7 @@ import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
 import ProductFormModal from "../../components/ProductFormModal";
+import TransactionModal from "../../components/TransactionModal";
 import { useCurrency } from "../../lib/useCurrency";
 import {
   CATEGORIES,
@@ -18,6 +19,7 @@ import {
   Pencil,
   Trash2,
   Package,
+  PackagePlus,
   Star,
   Loader2,
 } from "lucide-react";
@@ -32,6 +34,8 @@ export default function Products() {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [toDelete, setToDelete] = useState<ProductRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Producto para el que se abre una Compra ("Ingresar stock").
+  const [stockFor, setStockFor] = useState<ProductRow | null>(null);
 
   const products = useQuery(api.products.list, {
     category: category === "all" ? undefined : category,
@@ -188,6 +192,13 @@ export default function Products() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
+                            className="rounded-lg p-2 text-ink-400 hover:bg-emerald-50 hover:text-emerald-600"
+                            onClick={() => setStockFor(p)}
+                            title="Ingresar stock (registra una Compra)"
+                          >
+                            <PackagePlus className="h-4 w-4" />
+                          </button>
+                          <button
                             className="rounded-lg p-2 text-ink-400 hover:bg-brand-50 hover:text-brand-600"
                             onClick={() => openEdit(p)}
                             title="Editar"
@@ -222,6 +233,16 @@ export default function Products() {
           open={formOpen}
           onClose={() => setFormOpen(false)}
           product={editing}
+        />
+      )}
+
+      {/* Ingresar stock: abre una Compra con el producto preseleccionado */}
+      {stockFor && (
+        <TransactionModal
+          open
+          type="compra"
+          initialProductId={stockFor._id}
+          onClose={() => setStockFor(null)}
         />
       )}
 

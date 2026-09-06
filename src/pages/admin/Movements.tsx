@@ -53,13 +53,13 @@ export default function Movements() {
       {/* Acciones */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <button className="btn-primary" onClick={() => setModalType("venta")}>
-          <ShoppingCart className="h-4 w-4" /> Venta
+          <ShoppingCart className="h-4 w-4" /> Venta (− stock)
         </button>
         <button className="btn-secondary" onClick={() => setModalType("compra")}>
-          <PackagePlus className="h-4 w-4" /> Compra
+          <PackagePlus className="h-4 w-4" /> Compra (+ stock)
         </button>
         <button className="btn-secondary" onClick={() => setModalType("ingreso")}>
-          <TrendingUp className="h-4 w-4" /> Ingreso
+          <TrendingUp className="h-4 w-4" /> Otro ingreso
         </button>
         <button className="btn-secondary" onClick={() => setModalType("gasto")}>
           <TrendingDown className="h-4 w-4" /> Gasto

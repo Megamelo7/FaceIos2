@@ -162,7 +162,6 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
         imei: form.imei.trim() || undefined,
         costPrice: Number(form.costPrice),
         salePrice: Number(form.salePrice),
-        quantity: Number(form.quantity) || 0,
         minStock: num(form.minStock),
         status: form.status,
         featured: form.featured,
@@ -170,9 +169,10 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
         description: form.description.trim() || undefined,
       };
       if (isEdit && product) {
+        // El stock no se edita acá: sólo cambia desde Movimientos.
         await update({ id: product._id, ...payload });
       } else {
-        await create(payload);
+        await create({ ...payload, quantity: Number(form.quantity) || 0 });
       }
       onClose();
     } catch (err) {
@@ -317,6 +317,10 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
                 ))}
                 <option value={CUSTOM}>Otro (escribir a mano)…</option>
               </select>
+            ) : isCatalog && !forceCustom.model && !selectedModel && form.model === "" ? (
+              <select className="input" disabled value="">
+                <option value="">Primero elegí el modelo</option>
+              </select>
             ) : (
               <>
                 <input
@@ -346,6 +350,10 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
                     </option>
                   ))}
                   <option value={CUSTOM}>Otra (escribir a mano)…</option>
+                </select>
+              ) : isCatalog && !forceCustom.model && !selectedModel && form.model === "" ? (
+                <select className="input" disabled value="">
+                  <option value="">Primero elegí el modelo</option>
                 </select>
               ) : (
                 <>
@@ -440,15 +448,24 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
 
         {/* Stock y estado */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="Cantidad en stock">
-            <input
-              className="input"
-              type="number"
-              value={form.quantity}
-              onChange={(e) => set("quantity", e.target.value)}
-              placeholder="0"
-            />
-          </Field>
+          {isEdit ? (
+            <Field label="Stock actual" hint="Se ajusta desde Movimientos: Compra suma, Venta resta.">
+              <div className="input flex items-center bg-ink-50 font-semibold text-ink-700">
+                {product?.quantity ?? 0} u.
+              </div>
+            </Field>
+          ) : (
+            <Field label="Stock inicial" hint="Queda registrado como una Compra en Movimientos.">
+              <input
+                className="input"
+                type="number"
+                min={0}
+                value={form.quantity}
+                onChange={(e) => set("quantity", e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+          )}
           <Field label="Alerta de stock mínimo" hint="Por defecto: 2">
             <input
               className="input"
