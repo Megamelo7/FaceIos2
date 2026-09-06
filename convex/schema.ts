@@ -37,19 +37,8 @@ export default defineSchema({
     batteryType: v.optional(
       v.union(v.literal("original"), v.literal("reacondicionada")),
     ),
+    // IMEI (15 dígitos) para iPhone/iPad; número de serie libre para notebooks.
     imei: v.optional(v.string()),
-    // Resultado de la consulta oficial del IMEI en ENACOM (se guarda con el artículo).
-    imeiCheck: v.optional(
-      v.object({
-        status: v.union(v.literal("valido"), v.literal("bloqueado"), v.literal("error")),
-        title: v.string(),
-        message: v.string(),
-        gsma: v.optional(v.string()),
-        // "manual": el usuario consultó en la página oficial y cargó el resultado a mano.
-        source: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
-        checkedAt: v.number(),
-      }),
-    ),
     costPrice: v.number(),
     salePrice: v.number(),
     quantity: v.number(),
@@ -70,7 +59,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_category", ["category"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_imei", ["imei"]),
 
   transactions: defineTable({
     type: v.union(

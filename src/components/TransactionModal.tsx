@@ -55,8 +55,13 @@ export default function TransactionModal({
     [products, productId],
   );
 
-  // En una VENTA sólo se pueden elegir artículos previamente ingresados con stock.
-  const selectable = isSale ? products?.filter((p) => p.quantity > 0) : products;
+  // VENTA: sólo artículos con stock. COMPRA (reposición): sólo artículos por cantidad;
+  // los equipos con IMEI (iPhone / iPad) son únicos y entran como producto nuevo.
+  const selectable = isSale
+    ? products?.filter((p) => p.quantity > 0)
+    : isPurchase
+      ? products?.filter((p) => p.category !== "iphone" && p.category !== "ipad")
+      : products;
   const noStock = isSale && selectable !== undefined && selectable.length === 0;
 
   function onSelectProduct(id: string) {
@@ -177,7 +182,7 @@ export default function TransactionModal({
               label={isSale ? "Producto (sólo con stock)" : "Producto"}
               hint={
                 isPurchase && onCreateNewProduct
-                  ? "¿No está en la lista? Elegí “Producto nuevo” para cargarlo con todos los combos (modelo, color, capacidad…)."
+                  ? "Reposición de accesorios/AirPods. Los iPhone/iPad entran siempre como “Producto nuevo” (cada equipo con IMEI es único)."
                   : noStock
                     ? "No hay artículos con stock. Registrá una Compra primero."
                     : undefined

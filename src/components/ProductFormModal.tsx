@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
@@ -17,22 +18,12 @@ import {
   BatteryType,
   PAYMENT_METHODS,
 } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue, formatDateTime } from "../lib/format";
-import { isValidImei } from "../lib/imei";
-import {
-  Loader2,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldQuestion,
-  ExternalLink,
-  ClipboardCheck,
-} from "lucide-react";
+import { toDateInputValue, fromDateInputValue } from "../lib/format";
+import { isImeiFormat, normalizeImei, parseImeis } from "../lib/imei";
+import { Loader2 } from "lucide-react";
 
 /** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
 export type ProductWithImages = Doc<"products"> & { imageUrls: string[] };
-
-/** Resultado guardado de la consulta de IMEI en ENACOM. */
-type ImeiCheck = NonNullable<Doc<"products">["imeiCheck"]>;
 
 type Props = {
   open: boolean;
@@ -40,6 +31,11 @@ type Props = {
   product?: ProductWithImages | null;
   /** "purchase": alta desde Movimientos → Compra (pide medio de pago y fecha). */
   mode?: "purchase";
+  /**
+   * Precarga para "＋ Otra unidad": mismo modelo/color/capacidad/precios que un
+   * artículo existente, pero es un ALTA nueva (pide su propio IMEI; sin fotos).
+   */
+  template?: ProductWithImages | null;
 };
 
 const CUSTOM = "__custom__";
@@ -48,44 +44,48 @@ const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
 /** Categorías de equipos con almacenamiento, batería e IMEI/serie. */
 const DEVICE_CATS: Category[] = ["iphone", "ipad", "notebook"];
 
-export default function ProductFormModal({ open, onClose, product, mode }: Props) {
+export default function ProductFormModal({ open, onClose, product, mode, template }: Props) {
   const create = useMutation(api.products.create);
+  const createBatch = useMutation(api.products.createBatch);
   const update = useMutation(api.products.update);
   const catalog = useQuery(api.catalog.list, {}) ?? [];
   const isEdit = !!product;
   const isPurchase = mode === "purchase" && !isEdit;
+  // Valores iniciales: el producto a editar, o la plantilla de "＋ Otra unidad".
+  const base = product ?? template ?? null;
 
   const [form, setForm] = useState(() => ({
-    name: product?.name ?? "",
-    category: (product?.category ?? "iphone") as Category,
-    condition: (product?.condition ?? "nuevo") as Condition,
-    brand: product?.brand ?? "",
-    model: product?.model ?? "",
-    storage: product?.storage ?? "",
-    color: product?.color ?? "",
-    batteryHealth: product?.batteryHealth?.toString() ?? "",
-    batteryType: (product?.batteryType ?? "") as "" | BatteryType,
+    name: base?.name ?? "",
+    category: (base?.category ?? "iphone") as Category,
+    condition: (base?.condition ?? "nuevo") as Condition,
+    brand: base?.brand ?? "",
+    model: base?.model ?? "",
+    storage: base?.storage ?? "",
+    color: base?.color ?? "",
+    batteryHealth: base?.batteryHealth?.toString() ?? "",
+    batteryType: (base?.batteryType ?? "") as "" | BatteryType,
+    // El IMEI nunca se copia de la plantilla: cada unidad tiene el suyo.
     imei: product?.imei ?? "",
-    imeiCheck: (product?.imeiCheck ?? null) as ImeiCheck | null,
-    costPrice: product?.costPrice?.toString() ?? "",
-    salePrice: product?.salePrice?.toString() ?? "",
+    costPrice: base?.costPrice?.toString() ?? "",
+    salePrice: base?.salePrice?.toString() ?? "",
     quantity: product?.quantity?.toString() ?? "1",
-    minStock: product?.minStock?.toString() ?? "",
-    status: (product?.status ?? "disponible") as ProductStatus,
-    featured: product?.featured ?? false,
+    minStock: base?.minStock?.toString() ?? "",
+    status: (base?.status ?? "disponible") as ProductStatus,
+    featured: base?.featured ?? false,
+    // Fotos existentes (sólo al editar): ids alineados con sus URLs resueltas.
     images: (product?.images ?? []).map((id, i) => ({
       id,
       url: product?.imageUrls[i] ?? "",
     })) as ImageItem[],
-    description: product?.description ?? "",
+    description: base?.description ?? "",
   }));
+  // Alta de iPhone / iPad: uno o varios IMEIs en un solo campo (uno por unidad).
+  const [imeiText, setImeiText] = useState("");
   // "Otro / escribir a mano" elegido explícitamente en cada combo.
   const [forceCustom, setForceCustom] = useState({ model: false, color: false, storage: false });
   // Datos de la compra (sólo en modo compra).
   const [payment, setPayment] = useState("Efectivo");
   const [purchaseDate, setPurchaseDate] = useState(toDateInputValue(Date.now()));
-  // Consulta de IMEI en ENACOM (flujo asistido: copiar IMEI + abrir la página oficial).
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,47 +111,26 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
     storageOptions.length > 0 &&
     !forceCustom.storage &&
     (form.storage === "" || storageOptions.includes(form.storage));
+  // Hasta elegir modelo, color y capacidad muestran un combo deshabilitado.
+  const waitingForModel = isCatalog && !forceCustom.model && !selectedModel && form.model === "";
 
   const isDevice = DEVICE_CATS.includes(form.category);
   // Almacenamiento: equipos siempre; AirPods sólo si el modelo lo define.
   const showStorageField = isDevice || (isCatalog && storageOptions.length > 0);
-  const serialLabel = form.category === "notebook" ? "Número de serie" : "IMEI / Serie";
-  // ENACOM sólo verifica IMEI (iPhone / iPad); las notebooks usan número de serie.
-  const canCheckImei = form.category !== "notebook";
-  const imeiDigits = form.imei.replace(/\D/g, "");
-
-  /**
-   * ENACOM bloquea las conexiones desde redes cloud (Convex/Vercel → timeout),
-   * pero responde desde el navegador del usuario. Flujo asistido: copiamos el
-   * IMEI, abrimos la página oficial y el resultado se registra con un clic.
-   */
-  async function openEnacom() {
-    try {
-      await navigator.clipboard.writeText(imeiDigits);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 5000);
-    } catch {
-      setCopied(false);
-    }
-    window.open("https://imei.enacom.gob.ar/", "_blank", "noopener,noreferrer");
-  }
-
-  function setManualResult(status: "valido" | "bloqueado" | null) {
-    if (status === null) {
-      set("imeiCheck", null);
-      return;
-    }
-    set("imeiCheck", {
-      status,
-      title: status === "valido" ? "IMEI Válido" : "IMEI Bloqueado",
-      message:
-        status === "valido"
-          ? "Podés usar el equipo sin problemas."
-          : "El dispositivo figura denunciado por robo, hurto o extravío.",
-      source: "manual",
-      checkedAt: Date.now(),
-    });
-  }
+  // iPhone / iPad: IMEI obligatorio, 15 dígitos y único (cada equipo es 1 artículo).
+  // Notebooks: número de serie libre.
+  const usesImei = form.category !== "notebook";
+  const requiresImei = form.category === "iphone" || form.category === "ipad";
+  const serialLabel = usesImei ? (requiresImei ? "IMEI *" : "IMEI") : "Número de serie";
+  // Edición (o categorías sin IMEI obligatorio): un solo campo.
+  const imeiMissing = isEdit && requiresImei && normalizeImei(form.imei) === "";
+  const imeiInvalid = usesImei && form.imei.trim() !== "" && !isImeiFormat(form.imei);
+  // Alta de iPhone / iPad: cada IMEI pegado es una unidad (un artículo por IMEI).
+  const multiImei = !isEdit && requiresImei;
+  const imeiList = multiImei ? parseImeis(imeiText) : [];
+  const imeiListEmpty = multiImei && imeiList.length === 0;
+  const imeiListInvalid = multiImei && imeiList.some((d) => d.length !== 15);
+  const imeiListDup = multiImei && new Set(imeiList).size !== imeiList.length;
 
   function onChangeCategory(category: Category) {
     setForm((f) => ({ ...f, category, model: "", color: "", storage: "" }));
@@ -205,8 +184,19 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
     if (!form.name.trim()) return setError("El nombre es obligatorio.");
     if (form.costPrice === "" || form.salePrice === "")
       return setError("Ingresá el costo y el precio de venta.");
+    if (imeiMissing || imeiInvalid)
+      return setError("El IMEI es obligatorio y debe tener exactamente 15 dígitos.");
+    if (imeiListEmpty) return setError("Cargá al menos un IMEI de 15 dígitos.");
+    if (imeiListInvalid)
+      return setError(
+        "Todos los IMEIs deben tener exactamente 15 dígitos: revisá los marcados en rojo.",
+      );
+    if (imeiListDup) return setError("Hay IMEIs repetidos: cada unidad debe tener el suyo.");
     setSaving(true);
     try {
+      const purchase = isPurchase
+        ? { paymentMethod: payment, purchaseDate: fromDateInputValue(purchaseDate) }
+        : {};
       const payload = {
         name: form.name.trim(),
         category: form.category,
@@ -217,8 +207,6 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
         color: form.color.trim() || undefined,
         batteryHealth: num(form.batteryHealth),
         batteryType: form.batteryType || undefined,
-        imei: form.imei.trim() || undefined,
-        imeiCheck: form.imeiCheck ?? undefined,
         costPrice: Number(form.costPrice),
         salePrice: Number(form.salePrice),
         minStock: num(form.minStock),
@@ -227,21 +215,36 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
         images: form.images.map((i) => i.id),
         description: form.description.trim() || undefined,
       };
+      const singleImei = usesImei
+        ? normalizeImei(form.imei) || undefined
+        : form.imei.trim() || undefined;
       if (isEdit && product) {
         // El stock no se edita acá: sólo cambia desde Movimientos.
-        await update({ id: product._id, ...payload });
+        await update({ id: product._id, ...payload, imei: singleImei });
+      } else if (multiImei) {
+        // Un artículo por IMEI (1 unidad cada uno).
+        if (imeiList.length === 1) {
+          await create({ ...payload, imei: imeiList[0], quantity: 1, ...purchase });
+        } else {
+          await createBatch({ ...payload, imeis: imeiList, ...purchase });
+        }
       } else {
         await create({
           ...payload,
+          imei: singleImei,
           quantity: Number(form.quantity) || 0,
-          ...(isPurchase
-            ? { paymentMethod: payment, purchaseDate: fromDateInputValue(purchaseDate) }
-            : {}),
+          ...purchase,
         });
       }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar.");
+      setError(
+        err instanceof ConvexError
+          ? String(err.data)
+          : err instanceof Error
+            ? err.message
+            : "No se pudo guardar.",
+      );
       setSaving(false);
     }
   }
@@ -264,7 +267,15 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
       open={open}
       onClose={onClose}
       size="lg"
-      title={isEdit ? "Editar producto" : isPurchase ? "Compra: producto nuevo" : "Nuevo producto"}
+      title={
+        isEdit
+          ? "Editar producto"
+          : template
+            ? `Otra unidad: ${template.name}`
+            : isPurchase
+              ? "Compra: producto nuevo"
+              : "Nuevo producto"
+      }
       footer={
         <>
           <button className="btn-secondary" onClick={onClose} type="button">
@@ -382,7 +393,7 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                 ))}
                 <option value={CUSTOM}>Otro (escribir a mano)…</option>
               </select>
-            ) : isCatalog && !forceCustom.model && !selectedModel && form.model === "" ? (
+            ) : waitingForModel ? (
               <select className="input" disabled value="">
                 <option value="">Primero elegí el modelo</option>
               </select>
@@ -416,7 +427,7 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                   ))}
                   <option value={CUSTOM}>Otra (escribir a mano)…</option>
                 </select>
-              ) : isCatalog && !forceCustom.model && !selectedModel && form.model === "" ? (
+              ) : waitingForModel ? (
                 <select className="input" disabled value="">
                   <option value="">Primero elegí el modelo</option>
                 </select>
@@ -461,127 +472,81 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                   ))}
                 </select>
               </Field>
-              <Field label={serialLabel} className="sm:col-span-2">
-                <div className="flex gap-2">
-                  <input
-                    className="input"
-                    value={form.imei}
-                    onChange={(e) => {
-                      set("imei", e.target.value);
-                      // Cambió el número: la verificación anterior ya no aplica.
-                      set("imeiCheck", null);
-                    }}
-                    placeholder={canCheckImei ? "15 dígitos · marcá *#06# en el equipo" : "Opcional"}
+              {multiImei ? (
+                <Field
+                  label={imeiList.length > 1 ? `IMEI * (${imeiList.length} unidades)` : "IMEI *"}
+                  className="sm:col-span-2"
+                  hint="Obligatorio y único. Pegá uno o varios separados por coma, espacio o salto de línea: se crea un artículo por cada IMEI."
+                >
+                  <textarea
+                    className={`input min-h-[64px] resize-y font-mono text-sm ${
+                      imeiListInvalid || imeiListDup
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
+                        : ""
+                    }`}
+                    value={imeiText}
+                    onChange={(e) => setImeiText(e.target.value)}
+                    placeholder="353912345678901, 353912345678902, 353912345678903…"
                     inputMode="numeric"
+                    required
+                    autoFocus={!!template}
                   />
-                  {canCheckImei && (
-                    <button
-                      type="button"
-                      className="btn-secondary shrink-0"
-                      onClick={openEnacom}
-                      disabled={imeiDigits.length < 14}
-                      title="Copia el IMEI y abre la consulta oficial de ENACOM en otra pestaña"
-                    >
-                      {copied ? (
-                        <ClipboardCheck className="h-4 w-4 text-emerald-600" />
-                      ) : (
-                        <ExternalLink className="h-4 w-4" />
-                      )}
-                      Consultar en ENACOM
-                    </button>
+                  {imeiList.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {imeiList.map((d, i) => {
+                        const bad = d.length !== 15;
+                        const dup = !bad && imeiList.indexOf(d) !== i;
+                        return (
+                          <span
+                            key={`${d}-${i}`}
+                            className={`badge font-mono ${
+                              bad
+                                ? "bg-red-50 text-red-700"
+                                : dup
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                            }`}
+                            title={
+                              bad ? `${d.length} dígitos (deben ser 15)` : dup ? "Repetido" : "OK"
+                            }
+                          >
+                            {d}
+                            {bad ? ` · ${d.length}/15` : dup ? " · repetido" : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-                {canCheckImei && imeiDigits.length === 15 && (
-                  <p
-                    className={`mt-1.5 text-xs ${
-                      isValidImei(imeiDigits) ? "text-emerald-600" : "text-red-600"
+                </Field>
+              ) : (
+                <Field
+                  label={serialLabel}
+                  className="sm:col-span-2"
+                  hint={
+                    requiresImei
+                      ? "Obligatorio y único: 15 dígitos · marcá *#06# en el equipo"
+                      : usesImei
+                        ? "15 dígitos · marcá *#06# en el equipo"
+                        : undefined
+                  }
+                >
+                  <input
+                    className={`input ${
+                      imeiInvalid ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""
                     }`}
-                  >
-                    {isValidImei(imeiDigits)
-                      ? "✓ Formato de IMEI válido (dígito verificador correcto)."
-                      : "✗ El dígito verificador no coincide: revisá el número."}
-                  </p>
-                )}
-                {canCheckImei && imeiDigits.length >= 14 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500">
-                    <span>
-                      {copied
-                        ? "IMEI copiado: pegalo (Ctrl+V) en ENACOM y cargá acá el resultado:"
-                        : "Cargá acá el resultado que te dio ENACOM:"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setManualResult("valido")}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition-colors ${
-                        form.imeiCheck?.status === "valido"
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
-                      }`}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5" /> Válido
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setManualResult("bloqueado")}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition-colors ${
-                        form.imeiCheck?.status === "bloqueado"
-                          ? "border-red-600 bg-red-600 text-white"
-                          : "border-red-200 bg-white text-red-700 hover:bg-red-50"
-                      }`}
-                    >
-                      <ShieldAlert className="h-3.5 w-3.5" /> Bloqueado
-                    </button>
-                    {form.imeiCheck && (
-                      <button
-                        type="button"
-                        onClick={() => setManualResult(null)}
-                        className="text-ink-400 underline hover:text-ink-700"
-                      >
-                        limpiar
-                      </button>
-                    )}
-                  </div>
-                )}
-                {form.imeiCheck && (
-                  <div
-                    className={`mt-2 rounded-xl px-3.5 py-2.5 text-sm ${
-                      form.imeiCheck.status === "bloqueado"
-                        ? "bg-red-50 text-red-800"
-                        : form.imeiCheck.status === "valido"
-                          ? "bg-emerald-50 text-emerald-800"
-                          : "bg-amber-50 text-amber-800"
-                    }`}
-                  >
-                    <p className="flex items-center gap-1.5 font-semibold">
-                      {form.imeiCheck.status === "bloqueado" ? (
-                        <ShieldAlert className="h-4 w-4" />
-                      ) : form.imeiCheck.status === "valido" ? (
-                        <ShieldCheck className="h-4 w-4" />
-                      ) : (
-                        <ShieldQuestion className="h-4 w-4" />
-                      )}
-                      {form.imeiCheck.title}
+                    value={form.imei}
+                    onChange={(e) => set("imei", e.target.value)}
+                    placeholder={requiresImei ? "Ej: 353912345678901" : "Opcional"}
+                    inputMode={usesImei ? "numeric" : undefined}
+                    required={requiresImei}
+                  />
+                  {imeiInvalid && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      El IMEI debe tener exactamente 15 dígitos.
                     </p>
-                    <p className="mt-0.5 text-xs opacity-90">
-                      {form.imeiCheck.message}
-                      {form.imeiCheck.gsma ? ` · ${form.imeiCheck.gsma}` : ""}
-                    </p>
-                    <p className="mt-1 text-[11px] opacity-70">
-                      Fuente: ENACOM
-                      {form.imeiCheck.source === "manual" ? " (verificado a mano)" : ""} ·{" "}
-                      {formatDateTime(form.imeiCheck.checkedAt)} ·{" "}
-                      <a
-                        href="https://imei.enacom.gob.ar/"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline"
-                      >
-                        ver en ENACOM
-                      </a>
-                    </p>
-                  </div>
-                )}
-              </Field>
+                  )}
+                </Field>
+              )}
             </>
           )}
         </div>
@@ -630,6 +595,12 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
             <Field label="Stock actual" hint="Se ajusta desde Movimientos: Compra suma, Venta resta.">
               <div className="input flex items-center bg-ink-50 font-semibold text-ink-700">
                 {product?.quantity ?? 0} u.
+              </div>
+            </Field>
+          ) : requiresImei ? (
+            <Field label="Unidades" hint="Una por IMEI: cada unidad se crea como un artículo propio.">
+              <div className="input flex items-center bg-ink-50 font-semibold text-ink-700">
+                {imeiList.length} u.
               </div>
             </Field>
           ) : (

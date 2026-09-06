@@ -26,7 +26,7 @@ export const run = mutation({
 
     type Seed = {
       name: string;
-      category: "iphone" | "accesorio" | "airpods" | "otro";
+      category: "iphone" | "ipad" | "notebook" | "airpods" | "accesorio" | "otro";
       brand?: string;
       model?: string;
       storage?: string;
@@ -119,10 +119,15 @@ export const run = mutation({
     ];
 
     const ids: Record<string, Id<"products">> = {};
-    for (const s of seeds) {
+    for (const [i, s] of seeds.entries()) {
+      // iPhone / iPad: cada equipo es un artículo único con IMEI (15 dígitos de ejemplo).
+      const unique = s.category === "iphone" || s.category === "ipad";
+      const quantity = unique ? 1 : s.quantity;
       const id = await ctx.db.insert("products", {
         ...s,
-        status: s.quantity > 0 ? "disponible" : "agotado",
+        quantity,
+        imei: unique ? `35${String(1000000000000 + i * 7919).slice(-13)}` : undefined,
+        status: quantity > 0 ? "disponible" : "agotado",
         createdAt: now,
         updatedAt: now,
       });

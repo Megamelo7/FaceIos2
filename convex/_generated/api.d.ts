@@ -13,7 +13,6 @@ import type * as catalog from "../catalog.js";
 import type * as catalogData from "../catalogData.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
-import type * as enacom from "../enacom.js";
 import type * as finances from "../finances.js";
 import type * as http from "../http.js";
 import type * as products from "../products.js";
@@ -34,7 +33,6 @@ declare const fullApi: ApiFromModules<{
   catalogData: typeof catalogData;
   customers: typeof customers;
   dashboard: typeof dashboard;
-  enacom: typeof enacom;
   finances: typeof finances;
   http: typeof http;
   products: typeof products;

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
@@ -10,6 +10,8 @@ async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   }
   return userId;
 }
+
+/* ───────────────────────────── Validadores ───────────────────────────── */
 
 const categoryValidator = v.union(
   v.literal("iphone"),
@@ -40,17 +42,69 @@ const batteryTypeValidator = v.union(
 
 const imagesValidator = v.optional(v.array(v.id("_storage")));
 
-/** Resultado de la consulta de IMEI en ENACOM (ver convex/enacom.ts). */
-const imeiCheckValidator = v.optional(
-  v.object({
-    status: v.union(v.literal("valido"), v.literal("bloqueado"), v.literal("error")),
-    title: v.string(),
-    message: v.string(),
-    gsma: v.optional(v.string()),
-    source: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
-    checkedAt: v.number(),
-  }),
-);
+/** Campos del artículo compartidos por create / createBatch (sin imei ni cantidad). */
+const productFields = {
+  name: v.string(),
+  category: categoryValidator,
+  brand: v.optional(v.string()),
+  model: v.optional(v.string()),
+  storage: v.optional(v.string()),
+  color: v.optional(v.string()),
+  condition: conditionValidator,
+  batteryHealth: v.optional(v.number()),
+  batteryType: v.optional(batteryTypeValidator),
+  costPrice: v.number(),
+  salePrice: v.number(),
+  minStock: v.optional(v.number()),
+  status: v.optional(statusValidator),
+  featured: v.optional(v.boolean()),
+  images: imagesValidator,
+  description: v.optional(v.string()),
+};
+
+/** Datos opcionales de la compra inicial (cuando se carga desde Movimientos → Compra). */
+const purchaseFields = {
+  paymentMethod: v.optional(v.string()),
+  purchaseDate: v.optional(v.number()),
+  purchaseNotes: v.optional(v.string()),
+};
+
+/* ─────────────────────────── Reglas del IMEI ─────────────────────────── */
+
+/** Categorías de equipos con IMEI: cada unidad es un artículo único. */
+const IMEI_CATS = ["iphone", "ipad"];
+export const requiresImei = (category: string) => IMEI_CATS.includes(category);
+
+const IMEI_RE = /^\d{15}$/;
+
+/**
+ *  - iPhone / iPad: IMEI obligatorio de exactamente 15 dígitos.
+ *  - Si se carga (en cualquier categoría), debe ser único en la base.
+ */
+async function assertImei(
+  ctx: MutationCtx,
+  category: string,
+  imei: string | undefined,
+  excludeId?: Id<"products">,
+): Promise<void> {
+  const value = (imei ?? "").trim();
+  if (requiresImei(category)) {
+    if (!IMEI_RE.test(value)) {
+      throw new ConvexError("El IMEI es obligatorio y debe tener exactamente 15 dígitos.");
+    }
+  } else if (value === "") {
+    return;
+  }
+  const dup = await ctx.db
+    .query("products")
+    .withIndex("by_imei", (q) => q.eq("imei", value))
+    .first();
+  if (dup && dup._id !== excludeId) {
+    throw new ConvexError(`Ya existe un artículo con ese IMEI: ${dup.name}.`);
+  }
+}
+
+/* ───────────────────────────── Helpers ───────────────────────────── */
 
 /**
  * Resuelve las URLs de las fotos guardadas en Convex Storage.
@@ -81,6 +135,73 @@ async function toPublic(ctx: QueryCtx, p: Doc<"products">) {
     inStock: p.quantity > 0 && p.status !== "agotado",
   };
 }
+
+type ProductInput = {
+  name: string;
+  category: Doc<"products">["category"];
+  brand?: string;
+  model?: string;
+  storage?: string;
+  color?: string;
+  condition: Doc<"products">["condition"];
+  batteryHealth?: number;
+  batteryType?: Doc<"products">["batteryType"];
+  costPrice: number;
+  salePrice: number;
+  minStock?: number;
+  status?: Doc<"products">["status"];
+  featured?: boolean;
+  images?: Id<"_storage">[];
+  description?: string;
+};
+
+type PurchaseInput = {
+  paymentMethod?: string;
+  purchaseDate?: number;
+  purchaseNotes?: string;
+};
+
+/**
+ * Inserta un artículo y registra su stock inicial como una COMPRA en
+ * Movimientos: todo el stock tiene su movimiento de ingreso.
+ */
+async function insertProduct(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  fields: ProductInput,
+  unit: { quantity: number; imei?: string },
+  purchase: PurchaseInput,
+): Promise<Id<"products">> {
+  const now = Date.now();
+  const status = fields.status ?? (unit.quantity > 0 ? "disponible" : "agotado");
+  const id = await ctx.db.insert("products", {
+    ...fields,
+    imei: unit.imei?.trim() || undefined,
+    quantity: unit.quantity,
+    status,
+    createdAt: now,
+    updatedAt: now,
+  });
+  if (unit.quantity > 0) {
+    await ctx.db.insert("transactions", {
+      type: "compra",
+      productId: id,
+      productName: fields.name,
+      category: fields.category,
+      quantity: unit.quantity,
+      unitCost: fields.costPrice,
+      amount: fields.costPrice * unit.quantity,
+      paymentMethod: purchase.paymentMethod,
+      notes: purchase.purchaseNotes?.trim() || "Stock inicial",
+      date: purchase.purchaseDate ?? now,
+      createdBy: userId,
+      createdAt: now,
+    });
+  }
+  return id;
+}
+
+/* ───────────────────────────── Queries ───────────────────────────── */
 
 /**
  * Catálogo público para la landing. NO incluye precios ni datos sensibles.
@@ -138,6 +259,8 @@ export const get = query({
   },
 });
 
+/* ─────────────────────────── Fotos (storage) ─────────────────────────── */
+
 /** URL firmada para subir un archivo a Convex Storage (requiere sesión). */
 export const generateUploadUrl = mutation({
   args: {},
@@ -156,62 +279,71 @@ export const deleteUpload = mutation({
   },
 });
 
+/* ───────────────────────────── Mutations ───────────────────────────── */
+
+/**
+ * Alta de un artículo. iPhone / iPad: IMEI obligatorio y único, 1 unidad.
+ * Resto: cantidad libre (accesorios por stock).
+ */
 export const create = mutation({
   args: {
-    name: v.string(),
-    category: categoryValidator,
-    brand: v.optional(v.string()),
-    model: v.optional(v.string()),
-    storage: v.optional(v.string()),
-    color: v.optional(v.string()),
-    condition: conditionValidator,
-    batteryHealth: v.optional(v.number()),
-    batteryType: v.optional(batteryTypeValidator),
+    ...productFields,
     imei: v.optional(v.string()),
-    imeiCheck: imeiCheckValidator,
-    costPrice: v.number(),
-    salePrice: v.number(),
     quantity: v.number(),
-    minStock: v.optional(v.number()),
-    status: v.optional(statusValidator),
-    featured: v.optional(v.boolean()),
-    images: imagesValidator,
-    description: v.optional(v.string()),
-    // Datos opcionales de la compra inicial (cuando se carga desde Movimientos → Compra).
-    paymentMethod: v.optional(v.string()),
-    purchaseDate: v.optional(v.number()),
-    purchaseNotes: v.optional(v.string()),
+    ...purchaseFields,
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
-    const now = Date.now();
-    const { paymentMethod, purchaseDate, purchaseNotes, ...productFields } = args;
-    const status = args.status ?? (args.quantity > 0 ? "disponible" : "agotado");
-    const id = await ctx.db.insert("products", {
-      ...productFields,
-      status,
-      createdAt: now,
-      updatedAt: now,
-    });
-    // El stock inicial queda registrado como una COMPRA en Movimientos:
-    // todo el stock tiene su movimiento de ingreso (Compra suma, Venta resta).
-    if (args.quantity > 0) {
-      await ctx.db.insert("transactions", {
-        type: "compra",
-        productId: id,
-        productName: args.name,
-        category: args.category,
-        quantity: args.quantity,
-        unitCost: args.costPrice,
-        amount: args.costPrice * args.quantity,
-        paymentMethod,
-        notes: purchaseNotes?.trim() || "Stock inicial",
-        date: purchaseDate ?? now,
-        createdBy: userId,
-        createdAt: now,
-      });
+    await assertImei(ctx, args.category, args.imei);
+    const { imei, quantity, paymentMethod, purchaseDate, purchaseNotes, ...fields } = args;
+    return await insertProduct(
+      ctx,
+      userId,
+      fields,
+      // Un equipo con IMEI es un artículo único: siempre 1 unidad.
+      { quantity: requiresImei(args.category) ? 1 : quantity, imei },
+      { paymentMethod, purchaseDate, purchaseNotes },
+    );
+  },
+});
+
+/**
+ * Alta en lote de VARIAS unidades del mismo modelo (iPhone / iPad): un
+ * artículo por IMEI. Valida todos los IMEIs antes de insertar (atómico).
+ */
+export const createBatch = mutation({
+  args: {
+    ...productFields,
+    imeis: v.array(v.string()),
+    ...purchaseFields,
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    if (!requiresImei(args.category)) {
+      throw new ConvexError("El alta por IMEI es sólo para iPhone / iPad.");
     }
-    return id;
+    const imeis = args.imeis.map((s) => s.trim());
+    if (imeis.length === 0) throw new ConvexError("Cargá al menos un IMEI.");
+    if (new Set(imeis).size !== imeis.length) {
+      throw new ConvexError("Hay IMEIs repetidos: cada unidad debe tener el suyo.");
+    }
+    for (const imei of imeis) await assertImei(ctx, args.category, imei);
+
+    const { imeis: _ignored, paymentMethod, purchaseDate, purchaseNotes, ...fields } = args;
+    void _ignored;
+    const ids: Id<"products">[] = [];
+    for (const imei of imeis) {
+      ids.push(
+        await insertProduct(
+          ctx,
+          userId,
+          fields,
+          { quantity: 1, imei },
+          { paymentMethod, purchaseDate, purchaseNotes },
+        ),
+      );
+    }
+    return ids;
   },
 });
 
@@ -228,7 +360,6 @@ export const update = mutation({
     batteryHealth: v.optional(v.number()),
     batteryType: v.optional(batteryTypeValidator),
     imei: v.optional(v.string()),
-    imeiCheck: imeiCheckValidator,
     costPrice: v.optional(v.number()),
     salePrice: v.optional(v.number()),
     // `quantity` NO se edita acá: el stock sólo cambia desde Movimientos.
@@ -243,6 +374,7 @@ export const update = mutation({
     const { id, ...rest } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Producto no encontrado.");
+    await assertImei(ctx, args.category ?? existing.category, args.imei ?? existing.imei, id);
 
     // Si cambió la lista de fotos, borrar del storage las que se quitaron.
     if (args.images !== undefined) {
@@ -257,11 +389,7 @@ export const update = mutation({
     for (const [key, value] of Object.entries(rest)) {
       if (value !== undefined) (patch as Record<string, unknown>)[key] = value;
     }
-    // Si se envía el IMEI sin consulta asociada, se descarta la consulta anterior
-    // (el IMEI cambió o se borró): no puede quedar un resultado de otro número.
-    if (args.imei !== undefined && args.imeiCheck === undefined) {
-      (patch as Record<string, unknown>).imeiCheck = undefined;
-    }
+    if (args.imei !== undefined) patch.imei = args.imei.trim() || undefined;
     await ctx.db.patch(id, patch);
     return id;
   },

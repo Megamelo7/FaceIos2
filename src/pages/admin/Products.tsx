@@ -22,8 +22,6 @@ import {
   PackagePlus,
   Star,
   Loader2,
-  ShieldCheck,
-  ShieldAlert,
 } from "lucide-react";
 
 /** Fila tal como la devuelve `api.products.list` (con URLs de fotos resueltas). */
@@ -38,6 +36,8 @@ export default function Products() {
   const [deleting, setDeleting] = useState(false);
   // Producto para el que se abre una Compra ("Ingresar stock").
   const [stockFor, setStockFor] = useState<ProductRow | null>(null);
+  // iPhone / iPad: "＋ Otra unidad" precarga el modelo y pide el/los IMEI nuevos.
+  const [templateFor, setTemplateFor] = useState<ProductRow | null>(null);
 
   const products = useQuery(api.products.list, {
     category: category === "all" ? undefined : category,
@@ -157,16 +157,6 @@ export default function Products() {
                             <p className="flex items-center gap-1.5 font-medium text-ink-900">
                               {p.name}
                               {p.featured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
-                              {p.imeiCheck?.status === "bloqueado" && (
-                                <span title={`ENACOM: ${p.imeiCheck.title} — ${p.imeiCheck.message}`}>
-                                  <ShieldAlert className="h-3.5 w-3.5 text-red-500" />
-                                </span>
-                              )}
-                              {p.imeiCheck?.status === "valido" && (
-                                <span title={`ENACOM: ${p.imeiCheck.title} — ${p.imeiCheck.message}`}>
-                                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                                </span>
-                              )}
                             </p>
                             {subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>}
                           </div>
@@ -203,13 +193,24 @@ export default function Products() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            className="rounded-lg p-2 text-ink-400 hover:bg-emerald-50 hover:text-emerald-600"
-                            onClick={() => setStockFor(p)}
-                            title="Ingresar stock (registra una Compra)"
-                          >
-                            <PackagePlus className="h-4 w-4" />
-                          </button>
+                          {p.category === "iphone" || p.category === "ipad" ? (
+                            // Equipos con IMEI: otra unidad = artículo nuevo con su IMEI.
+                            <button
+                              className="rounded-lg p-2 text-ink-400 hover:bg-emerald-50 hover:text-emerald-600"
+                              onClick={() => setTemplateFor(p)}
+                              title="＋ Otra unidad de este modelo (pide IMEI nuevo)"
+                            >
+                              <PackagePlus className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              className="rounded-lg p-2 text-ink-400 hover:bg-emerald-50 hover:text-emerald-600"
+                              onClick={() => setStockFor(p)}
+                              title="Ingresar stock (registra una Compra)"
+                            >
+                              <PackagePlus className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             className="rounded-lg p-2 text-ink-400 hover:bg-brand-50 hover:text-brand-600"
                             onClick={() => openEdit(p)}
@@ -247,6 +248,17 @@ export default function Products() {
           product={editing}
           // Todo artículo nuevo entra por una Compra (misma lógica que Movimientos).
           mode={editing ? undefined : "purchase"}
+        />
+      )}
+
+      {/* Otra unidad (iPhone / iPad): alta precargada que pide IMEI nuevo */}
+      {templateFor && (
+        <ProductFormModal
+          key={`tpl-${templateFor._id}`}
+          open
+          mode="purchase"
+          template={templateFor}
+          onClose={() => setTemplateFor(null)}
         />
       )}
 

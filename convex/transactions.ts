@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
@@ -176,6 +176,11 @@ export const recordPurchase = mutation({
     if (args.productId) {
       const product = await ctx.db.get(args.productId);
       if (!product) throw new Error("Producto no encontrado.");
+      if (product.category === "iphone" || product.category === "ipad") {
+        throw new ConvexError(
+          "Los equipos con IMEI son únicos y no se reponen: cargá una Compra de producto nuevo.",
+        );
+      }
       productName = product.name;
       category = product.category;
       const newQty = product.quantity + args.quantity;
