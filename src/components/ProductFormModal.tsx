@@ -18,6 +18,7 @@ import {
   PAYMENT_METHODS,
 } from "../lib/categories";
 import { toDateInputValue, fromDateInputValue, formatDateTime } from "../lib/format";
+import { isValidImei } from "../lib/imei";
 import {
   Loader2,
   ShieldCheck,
@@ -490,6 +491,17 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                     </button>
                   )}
                 </div>
+                {canCheckImei && imeiDigits.length === 15 && (
+                  <p
+                    className={`mt-1.5 text-xs ${
+                      isValidImei(imeiDigits) ? "text-emerald-600" : "text-red-600"
+                    }`}
+                  >
+                    {isValidImei(imeiDigits)
+                      ? "✓ Formato de IMEI válido (dígito verificador correcto)."
+                      : "✗ El dígito verificador no coincide: revisá el número."}
+                  </p>
+                )}
                 {canCheckImei && imeiDigits.length >= 14 && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500">
                     <span>
