@@ -14,6 +14,48 @@ export const findByEmail = internalQuery({
   },
 });
 
+/** ¿Hay cero usuarios? (uso interno) */
+export const isEmpty = internalQuery({
+  args: {},
+  handler: async (ctx) => (await ctx.db.query("users").take(1)).length === 0,
+});
+
+/**
+ * Público: indica si el sistema aún no tiene ningún usuario (primer arranque).
+ * Sólo en ese caso el login ofrece crear la cuenta admin inicial.
+ */
+export const needsBootstrap = query({
+  args: {},
+  handler: async (ctx) => (await ctx.db.query("users").take(1)).length === 0,
+});
+
+/**
+ * Crea el PRIMER admin cuando no existe ningún usuario. Se deshabilita solo
+ * en cuanto hay un usuario (después, las cuentas se crean desde Usuarios).
+ */
+export const bootstrap = action({
+  args: { email: v.string(), name: v.string(), password: v.string() },
+  handler: async (ctx, args): Promise<null> => {
+    const empty = await ctx.runQuery(internal.users.isEmpty, {});
+    if (!empty) {
+      throw new ConvexError("Ya existe un administrador. Pedile que cree tu usuario.");
+    }
+    const email = args.email.trim().toLowerCase();
+    const name = args.name.trim();
+    if (!email || !email.includes("@")) throw new ConvexError("Ingresá un email válido.");
+    if (!name) throw new ConvexError("El nombre es obligatorio.");
+    if (args.password.length < 8) {
+      throw new ConvexError("La contraseña debe tener al menos 8 caracteres.");
+    }
+    await createAccount(ctx, {
+      provider: "password",
+      account: { id: email, secret: args.password },
+      profile: { email, name },
+    });
+    return null;
+  },
+});
+
 /** Lista los usuarios con acceso al panel (requiere sesión). */
 export const list = query({
   args: {},
