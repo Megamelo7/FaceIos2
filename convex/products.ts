@@ -13,8 +13,10 @@ async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
 
 const categoryValidator = v.union(
   v.literal("iphone"),
-  v.literal("accesorio"),
+  v.literal("ipad"),
+  v.literal("notebook"),
   v.literal("airpods"),
+  v.literal("accesorio"),
   v.literal("otro"),
 );
 
@@ -36,8 +38,20 @@ const batteryTypeValidator = v.union(
   v.literal("reacondicionada"),
 );
 
+const imagesValidator = v.optional(v.array(v.id("_storage")));
+
+/**
+ * Resuelve las URLs de las fotos guardadas en Convex Storage.
+ * Devuelve un array alineado con `images` ("" si alguna no existe).
+ */
+async function imageUrlsOf(ctx: QueryCtx | MutationCtx, p: Doc<"products">): Promise<string[]> {
+  const ids = p.images ?? [];
+  const urls = await Promise.all(ids.map((id) => ctx.storage.getUrl(id)));
+  return urls.map((u) => u ?? "");
+}
+
 /** Datos públicos de un producto: SIN precios ni datos sensibles (IMEI, costo). */
-function toPublic(p: Doc<"products">) {
+async function toPublic(ctx: QueryCtx, p: Doc<"products">) {
   return {
     _id: p._id,
     name: p.name,
@@ -49,7 +63,7 @@ function toPublic(p: Doc<"products">) {
     condition: p.condition,
     batteryHealth: p.batteryHealth,
     batteryType: p.batteryType,
-    imageUrl: p.imageUrl,
+    imageUrls: (await imageUrlsOf(ctx, p)).filter(Boolean),
     description: p.description,
     featured: p.featured ?? false,
     inStock: p.quantity > 0 && p.status !== "agotado",
@@ -64,13 +78,13 @@ export const listPublic = query({
   args: {},
   handler: async (ctx) => {
     const products = await ctx.db.query("products").order("desc").collect();
-    return products
-      .filter((p) => p.status !== "oculto")
-      .map(toPublic);
+    return await Promise.all(
+      products.filter((p) => p.status !== "oculto").map((p) => toPublic(ctx, p)),
+    );
   },
 });
 
-/** Listado completo para el admin (requiere sesión). */
+/** Listado completo para el admin (requiere sesión), con URLs de las fotos. */
 export const list = query({
   args: {
     category: v.optional(categoryValidator),
@@ -96,7 +110,9 @@ export const list = query({
           .some((field) => field!.toLowerCase().includes(search)),
       );
     }
-    return products;
+    return await Promise.all(
+      products.map(async (p) => ({ ...p, imageUrls: await imageUrlsOf(ctx, p) })),
+    );
   },
 });
 
@@ -104,7 +120,27 @@ export const get = query({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    return await ctx.db.get(args.id);
+    const p = await ctx.db.get(args.id);
+    if (!p) return null;
+    return { ...p, imageUrls: await imageUrlsOf(ctx, p) };
+  },
+});
+
+/** URL firmada para subir un archivo a Convex Storage (requiere sesión). */
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/** Borra un archivo recién subido que no se llegó a guardar en ningún producto. */
+export const deleteUpload = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    await ctx.storage.delete(args.storageId);
   },
 });
 
@@ -126,7 +162,7 @@ export const create = mutation({
     minStock: v.optional(v.number()),
     status: v.optional(statusValidator),
     featured: v.optional(v.boolean()),
-    imageUrl: v.optional(v.string()),
+    images: imagesValidator,
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -161,7 +197,7 @@ export const update = mutation({
     minStock: v.optional(v.number()),
     status: v.optional(statusValidator),
     featured: v.optional(v.boolean()),
-    imageUrl: v.optional(v.string()),
+    images: imagesValidator,
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -169,6 +205,15 @@ export const update = mutation({
     const { id, ...rest } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Producto no encontrado.");
+
+    // Si cambió la lista de fotos, borrar del storage las que se quitaron.
+    if (args.images !== undefined) {
+      const keep = new Set(args.images);
+      for (const oldId of existing.images ?? []) {
+        if (!keep.has(oldId)) await ctx.storage.delete(oldId);
+      }
+    }
+
     // Limpiar campos undefined para no sobrescribir con undefined.
     const patch: Partial<Doc<"products">> = { updatedAt: Date.now() };
     for (const [key, value] of Object.entries(rest)) {
@@ -183,6 +228,11 @@ export const remove = mutation({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
+    const existing = await ctx.db.get(args.id);
+    // Borrar también sus fotos del storage.
+    for (const imageId of existing?.images ?? []) {
+      await ctx.storage.delete(imageId);
+    }
     await ctx.db.delete(args.id);
   },
 });

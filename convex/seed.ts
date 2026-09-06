@@ -39,7 +39,6 @@ export const run = mutation({
       minStock?: number;
       featured?: boolean;
       description?: string;
-      imageUrl?: string;
     };
 
     const seeds: Seed[] = [
@@ -187,9 +186,9 @@ export const run = mutation({
     if (!settings) {
       await ctx.db.insert("settings", {
         key: "store",
-        storeName: "iPhone Store",
-        whatsapp: "5491112345678",
-        instagram: "iphonestore",
+        storeName: "FaceIos2",
+        whatsapp: "https://wa.me/qr/VCBMWO6HPZ23B1",
+        instagram: "faceios2",
         currency: "ARS",
         heroTitle: "iPhone, como debe ser.",
         heroSubtitle: "Equipos nuevos y usados con garantía, y todos los accesorios. Consultá disponibilidad.",

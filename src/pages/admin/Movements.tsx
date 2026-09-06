@@ -16,9 +16,15 @@ import {
   Trash2,
   Receipt,
   Loader2,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from "lucide-react";
 
-export default function Sales() {
+/**
+ * Movimientos: ventas, compras, ingresos y gastos.
+ * Una VENTA egresa unidades del stock; una COMPRA las ingresa.
+ */
+export default function Movements() {
   const [filter, setFilter] = useState<TxType | "all">("all");
   const [modalType, setModalType] = useState<TxType | null>(null);
   const [toDelete, setToDelete] = useState<Id<"transactions"> | null>(null);
@@ -60,10 +66,21 @@ export default function Sales() {
         </button>
       </div>
 
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-500">
+        <span className="inline-flex items-center gap-1">
+          <ArrowUpRight className="h-3.5 w-3.5 text-red-500" /> Venta: <strong>egresa</strong>{" "}
+          unidades del stock
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-500" /> Compra:{" "}
+          <strong>ingresa</strong> unidades al stock
+        </span>
+      </p>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
-          Todas
+          Todos
         </FilterChip>
         {(Object.keys(TX_META) as TxType[]).map((t) => (
           <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)}>
@@ -74,7 +91,7 @@ export default function Sales() {
 
       {/* Tabla */}
       {txs === undefined ? (
-        <FullPageLoader label="Cargando transacciones…" />
+        <FullPageLoader label="Cargando movimientos…" />
       ) : txs.length === 0 ? (
         <EmptyState
           icon={Receipt}
@@ -89,11 +106,12 @@ export default function Sales() {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[840px] text-sm">
               <thead>
                 <tr className="border-b border-ink-100 text-left text-xs uppercase tracking-wide text-ink-400">
                   <th className="px-4 py-3 font-semibold">Tipo</th>
                   <th className="px-4 py-3 font-semibold">Detalle</th>
+                  <th className="px-4 py-3 text-center font-semibold">Stock</th>
                   <th className="px-4 py-3 font-semibold">Pago</th>
                   <th className="px-4 py-3 font-semibold">Fecha</th>
                   <th className="px-4 py-3 text-right font-semibold">Monto</th>
@@ -104,6 +122,13 @@ export default function Sales() {
               <tbody className="divide-y divide-ink-50">
                 {txs.map((t) => {
                   const meta = TX_META[t.type];
+                  const units = t.quantity ?? 0;
+                  const stockDelta =
+                    t.type === "venta" && units > 0
+                      ? -units
+                      : t.type === "compra" && units > 0
+                        ? units
+                        : 0;
                   return (
                     <tr key={t._id} className="hover:bg-ink-50/50">
                       <td className="px-4 py-3">
@@ -119,6 +144,28 @@ export default function Sales() {
                         )}
                         {t.notes && !t.customerName && (
                           <p className="truncate text-xs text-ink-400">{t.notes}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {stockDelta !== 0 ? (
+                          <span
+                            className={`inline-flex items-center gap-0.5 rounded-lg px-2 py-0.5 text-xs font-semibold ${
+                              stockDelta < 0
+                                ? "bg-red-50 text-red-600"
+                                : "bg-emerald-50 text-emerald-600"
+                            }`}
+                            title={stockDelta < 0 ? "Egreso de stock" : "Ingreso de stock"}
+                          >
+                            {stockDelta < 0 ? (
+                              <ArrowUpRight className="h-3 w-3" />
+                            ) : (
+                              <ArrowDownLeft className="h-3 w-3" />
+                            )}
+                            {stockDelta > 0 ? "+" : "−"}
+                            {Math.abs(stockDelta)} u.
+                          </span>
+                        ) : (
+                          <span className="text-ink-300">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-ink-500">{t.paymentMethod ?? "—"}</td>
@@ -187,7 +234,7 @@ export default function Sales() {
         }
       >
         <p className="text-sm text-ink-600">
-          ¿Eliminar este movimiento? Si es una venta o compra, el stock del producto se ajusta
+          ¿Eliminar este movimiento? Si es una venta o compra, el stock del producto se revierte
           automáticamente.
         </p>
       </Modal>

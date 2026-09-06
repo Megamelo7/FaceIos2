@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
@@ -31,14 +32,18 @@ type PublicProduct = {
   condition: Condition;
   batteryHealth?: number;
   batteryType?: "original" | "reacondicionada";
-  imageUrl?: string;
+  imageUrls: string[];
   description?: string;
   featured: boolean;
   inStock: boolean;
 };
 
-function waLink(number: string, text: string) {
-  const clean = (number || "").replace(/[^\d]/g, "");
+function waLink(whatsapp: string, text: string) {
+  const val = (whatsapp || "").trim();
+  if (!val) return "";
+  // Si ya es un link completo (p. ej. wa.me/qr/...), usarlo tal cual (sin prefill).
+  if (val.startsWith("http")) return val;
+  const clean = val.replace(/[^\d]/g, "");
   return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
 }
 
@@ -258,6 +263,8 @@ function ProductCard({
 }) {
   const meta = CATEGORIES[product.category];
   const cond = CONDITIONS[product.condition];
+  const [active, setActive] = useState(0);
+  const mainImage = product.imageUrls[active] ?? product.imageUrls[0];
   const specs = [product.storage, product.color].filter(Boolean).join(" · ");
   const msg = `Hola ${storeName}! Me interesa el ${product.name}${
     product.storage ? ` ${product.storage}` : ""
@@ -267,9 +274,9 @@ function ProductCard({
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-lg">
       {/* Imagen */}
       <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-ink-100 to-ink-50">
-        {product.imageUrl ? (
+        {mainImage ? (
           <img
-            src={product.imageUrl}
+            src={mainImage}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
@@ -291,6 +298,27 @@ function ProductCard({
           </div>
         )}
       </div>
+
+      {/* Miniaturas (cuando hay varias fotos) */}
+      {product.imageUrls.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto px-3 pt-3">
+          {product.imageUrls.map((url, i) => (
+            <button
+              key={url + i}
+              type="button"
+              onClick={() => setActive(i)}
+              className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                i === active
+                  ? "border-brand-500"
+                  : "border-transparent opacity-70 hover:opacity-100"
+              }`}
+              aria-label={`Foto ${i + 1}`}
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Info */}
       <div className="flex flex-1 flex-col p-5">

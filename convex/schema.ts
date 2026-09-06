@@ -18,8 +18,10 @@ export default defineSchema({
     name: v.string(),
     category: v.union(
       v.literal("iphone"),
-      v.literal("accesorio"),
+      v.literal("ipad"),
+      v.literal("notebook"),
       v.literal("airpods"),
+      v.literal("accesorio"),
       v.literal("otro"),
     ),
     brand: v.optional(v.string()),
@@ -47,7 +49,8 @@ export default defineSchema({
       v.literal("oculto"),
     ),
     featured: v.optional(v.boolean()),
-    imageUrl: v.optional(v.string()),
+    // Fotos del producto, guardadas en Convex Storage (la primera es la principal).
+    images: v.optional(v.array(v.id("_storage"))),
     description: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -82,6 +85,25 @@ export default defineSchema({
   })
     .index("by_type", ["type"])
     .index("by_date", ["date"]),
+
+  /**
+   * Catálogo de modelos (configuración): modelo + colores + capacidades
+   * disponibles. Alimenta los combos del alta de artículo. Sólo para las
+   * categorías de equipos Apple; accesorios/otros se cargan a mano.
+   */
+  deviceModels: defineTable({
+    category: v.union(
+      v.literal("iphone"),
+      v.literal("ipad"),
+      v.literal("notebook"),
+      v.literal("airpods"),
+    ),
+    name: v.string(),
+    colors: v.array(v.string()),
+    storages: v.array(v.string()),
+    order: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_category", ["category"]),
 
   settings: defineTable({
     key: v.string(),

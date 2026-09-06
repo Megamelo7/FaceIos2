@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { FullPageLoader, Field } from "../../components/ui";
@@ -122,12 +123,14 @@ export default function Settings() {
           <h3 className="font-semibold text-ink-900">Seguridad del acceso</h3>
         </div>
         <p className="text-sm text-ink-600">
-          Para cerrar el registro de nuevas cuentas (recomendado luego de crear tu usuario),
-          definí los emails autorizados desde la terminal:
+          El registro público está <strong className="text-ink-900">deshabilitado</strong>: nadie
+          puede crearse una cuenta desde el login. Los usuarios con acceso al panel se crean y
+          administran desde la sección{" "}
+          <Link to="/admin/usuarios" className="font-semibold text-brand-600 hover:text-brand-700">
+            Usuarios
+          </Link>
+          .
         </p>
-        <code className="mt-3 block rounded-xl bg-ink-900 px-4 py-3 font-mono text-xs text-emerald-300">
-          npx convex env set ADMIN_EMAILS "tu@email.com"
-        </code>
       </div>
     </div>
   );

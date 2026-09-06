@@ -1,13 +1,16 @@
 import { useState, FormEvent } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
+import ImageUploader, { ImageItem } from "./ImageUploader";
 import {
   CATEGORIES,
   CONDITIONS,
   STATUSES,
   BATTERY_TYPES,
+  CATEGORY_ORDER,
+  isCatalogCategory,
   Category,
   Condition,
   ProductStatus,
@@ -15,17 +18,25 @@ import {
 } from "../lib/categories";
 import { Loader2 } from "lucide-react";
 
+/** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
+export type ProductWithImages = Doc<"products"> & { imageUrls: string[] };
+
 type Props = {
   open: boolean;
   onClose: () => void;
-  product?: Doc<"products"> | null;
+  product?: ProductWithImages | null;
 };
 
+const CUSTOM = "__custom__";
 const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+
+/** Categorías de equipos con almacenamiento, batería e IMEI/serie. */
+const DEVICE_CATS: Category[] = ["iphone", "ipad", "notebook"];
 
 export default function ProductFormModal({ open, onClose, product }: Props) {
   const create = useMutation(api.products.create);
   const update = useMutation(api.products.update);
+  const catalog = useQuery(api.catalog.list, {}) ?? [];
   const isEdit = !!product;
 
   const [form, setForm] = useState(() => ({
@@ -45,16 +56,86 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
     minStock: product?.minStock?.toString() ?? "",
     status: (product?.status ?? "disponible") as ProductStatus,
     featured: product?.featured ?? false,
-    imageUrl: product?.imageUrl ?? "",
+    images: (product?.images ?? []).map((id, i) => ({
+      id,
+      url: product?.imageUrls[i] ?? "",
+    })) as ImageItem[],
     description: product?.description ?? "",
   }));
+  // "Otro / escribir a mano" elegido explícitamente en cada combo.
+  const [forceCustom, setForceCustom] = useState({ model: false, color: false, storage: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const isPhoneLike = form.category === "iphone";
+  /* ───────── Combos desde el catálogo de modelos ───────── */
+  const isCatalog = isCatalogCategory(form.category);
+  const models = catalog.filter((m) => m.category === form.category);
+  const selectedModel = models.find((m) => m.name === form.model);
+  const colorOptions = selectedModel?.colors ?? [];
+  const storageOptions = selectedModel?.storages ?? [];
+
+  const showModelSelect =
+    isCatalog && !forceCustom.model && (form.model === "" || !!selectedModel);
+  const showColorSelect =
+    !!selectedModel &&
+    colorOptions.length > 0 &&
+    !forceCustom.color &&
+    (form.color === "" || colorOptions.includes(form.color));
+  const showStorageSelect =
+    !!selectedModel &&
+    storageOptions.length > 0 &&
+    !forceCustom.storage &&
+    (form.storage === "" || storageOptions.includes(form.storage));
+
+  const isDevice = DEVICE_CATS.includes(form.category);
+  // Almacenamiento: equipos siempre; AirPods sólo si el modelo lo define.
+  const showStorageField = isDevice || (isCatalog && storageOptions.length > 0);
+  const serialLabel = form.category === "notebook" ? "Número de serie" : "IMEI / Serie";
+
+  function onChangeCategory(category: Category) {
+    setForm((f) => ({ ...f, category, model: "", color: "", storage: "" }));
+    setForceCustom({ model: false, color: false, storage: false });
+  }
+
+  function onSelectModel(value: string) {
+    if (value === CUSTOM) {
+      setForceCustom((c) => ({ ...c, model: true }));
+      setForm((f) => ({ ...f, model: "", color: "", storage: "" }));
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      model: value,
+      // Autocompletar nombre y marca si aún no los cargó el usuario.
+      name: f.name.trim() === "" || f.name === f.model ? value : f.name,
+      brand: f.brand.trim() === "" ? "Apple" : f.brand,
+      color: "",
+      storage: "",
+    }));
+    setForceCustom({ model: false, color: false, storage: false });
+  }
+
+  function onSelectColor(value: string) {
+    if (value === CUSTOM) {
+      setForceCustom((c) => ({ ...c, color: true }));
+      set("color", "");
+      return;
+    }
+    set("color", value);
+  }
+
+  function onSelectStorage(value: string) {
+    if (value === CUSTOM) {
+      setForceCustom((c) => ({ ...c, storage: true }));
+      set("storage", "");
+      return;
+    }
+    set("storage", value);
+  }
+
   const cost = Number(form.costPrice) || 0;
   const price = Number(form.salePrice) || 0;
   const margin = price - cost;
@@ -85,7 +166,7 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
         minStock: num(form.minStock),
         status: form.status,
         featured: form.featured,
-        imageUrl: form.imageUrl.trim() || undefined,
+        images: form.images.map((i) => i.id),
         description: form.description.trim() || undefined,
       };
       if (isEdit && product) {
@@ -99,6 +180,19 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
       setSaving(false);
     }
   }
+
+  const backToList = (field: "model" | "color" | "storage") => (
+    <button
+      type="button"
+      className="mt-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+      onClick={() => {
+        setForceCustom((c) => ({ ...c, [field]: false }));
+        set(field, "");
+      }}
+    >
+      ← Elegir de la lista
+    </button>
+  );
 
   return (
     <Modal
@@ -124,22 +218,13 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Nombre / Título" className="sm:col-span-2">
-            <input
-              className="input"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="iPhone 15 Pro Max"
-            />
-          </Field>
-
           <Field label="Categoría">
             <select
               className="input"
               value={form.category}
-              onChange={(e) => set("category", e.target.value as Category)}
+              onChange={(e) => onChangeCategory(e.target.value as Category)}
             >
-              {(Object.keys(CATEGORIES) as Category[]).map((c) => (
+              {CATEGORY_ORDER.map((c) => (
                 <option key={c} value={c}>
                   {CATEGORIES[c].label}
                 </option>
@@ -161,6 +246,52 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
             </select>
           </Field>
 
+          {/* Modelo: combo desde el catálogo o texto libre */}
+          <Field
+            label="Modelo"
+            className={isCatalog ? "sm:col-span-2" : ""}
+            hint={
+              isCatalog && models.length === 0
+                ? "No hay modelos cargados para esta categoría. Cargalos en Modelos o escribí a mano."
+                : undefined
+            }
+          >
+            {showModelSelect ? (
+              <select
+                className="input"
+                value={form.model}
+                onChange={(e) => onSelectModel(e.target.value)}
+              >
+                <option value="">— Elegí un modelo —</option>
+                {models.map((m) => (
+                  <option key={m._id} value={m.name}>
+                    {m.name}
+                  </option>
+                ))}
+                <option value={CUSTOM}>Otro (escribir a mano)…</option>
+              </select>
+            ) : (
+              <>
+                <input
+                  className="input"
+                  value={form.model}
+                  onChange={(e) => set("model", e.target.value)}
+                  placeholder={isCatalog ? "Escribí el modelo" : "Ej: Cargador 20W"}
+                />
+                {isCatalog && models.length > 0 && backToList("model")}
+              </>
+            )}
+          </Field>
+
+          <Field label="Nombre / Título" className="sm:col-span-2">
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Se completa con el modelo; podés ajustarlo"
+            />
+          </Field>
+
           <Field label="Marca">
             <input
               className="input"
@@ -169,33 +300,69 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
               placeholder="Apple"
             />
           </Field>
-          <Field label="Modelo">
-            <input
-              className="input"
-              value={form.model}
-              onChange={(e) => set("model", e.target.value)}
-              placeholder="iPhone 15 Pro Max"
-            />
-          </Field>
 
-          {isPhoneLike && (
-            <>
-              <Field label="Almacenamiento">
-                <input
-                  className="input"
-                  value={form.storage}
-                  onChange={(e) => set("storage", e.target.value)}
-                  placeholder="256GB"
-                />
-              </Field>
-              <Field label="Color">
+          {/* Color: combo del modelo o texto libre */}
+          <Field label={isCatalog ? "Color" : "Color / Variante"}>
+            {showColorSelect ? (
+              <select
+                className="input"
+                value={form.color}
+                onChange={(e) => onSelectColor(e.target.value)}
+              >
+                <option value="">— Elegí un color —</option>
+                {colorOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value={CUSTOM}>Otro (escribir a mano)…</option>
+              </select>
+            ) : (
+              <>
                 <input
                   className="input"
                   value={form.color}
                   onChange={(e) => set("color", e.target.value)}
-                  placeholder="Titanio Natural"
+                  placeholder="Opcional"
                 />
-              </Field>
+                {!!selectedModel && colorOptions.length > 0 && backToList("color")}
+              </>
+            )}
+          </Field>
+
+          {/* Almacenamiento: combo del modelo o texto libre */}
+          {showStorageField && (
+            <Field label="Almacenamiento">
+              {showStorageSelect ? (
+                <select
+                  className="input"
+                  value={form.storage}
+                  onChange={(e) => onSelectStorage(e.target.value)}
+                >
+                  <option value="">— Elegí la capacidad —</option>
+                  {storageOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                  <option value={CUSTOM}>Otra (escribir a mano)…</option>
+                </select>
+              ) : (
+                <>
+                  <input
+                    className="input"
+                    value={form.storage}
+                    onChange={(e) => set("storage", e.target.value)}
+                    placeholder="256GB"
+                  />
+                  {!!selectedModel && storageOptions.length > 0 && backToList("storage")}
+                </>
+              )}
+            </Field>
+          )}
+
+          {isDevice && (
+            <>
               <Field label="Salud de batería (%)">
                 <input
                   className="input"
@@ -221,7 +388,7 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
                   ))}
                 </select>
               </Field>
-              <Field label="IMEI / Serie" className="sm:col-span-2">
+              <Field label={serialLabel} className="sm:col-span-2">
                 <input
                   className="input"
                   value={form.imei}
@@ -230,16 +397,6 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
                 />
               </Field>
             </>
-          )}
-          {!isPhoneLike && (
-            <Field label="Color / Variante">
-              <input
-                className="input"
-                value={form.color}
-                onChange={(e) => set("color", e.target.value)}
-                placeholder="Opcional"
-              />
-            </Field>
           )}
         </div>
 
@@ -316,13 +473,12 @@ export default function ProductFormModal({ open, onClose, product }: Props) {
           </Field>
         </div>
 
-        <Field label="URL de imagen" hint="Opcional. Se muestra en la tienda.">
-          <input
-            className="input"
-            value={form.imageUrl}
-            onChange={(e) => set("imageUrl", e.target.value)}
-            placeholder="https://…"
-          />
+        {/* Fotos */}
+        <Field
+          label="Fotos del producto"
+          hint="La primera foto es la principal y se muestra en la tienda. Podés subir varias."
+        >
+          <ImageUploader value={form.images} onChange={(items) => set("images", items)} />
         </Field>
 
         <Field label="Descripción">

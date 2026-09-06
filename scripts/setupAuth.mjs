@@ -10,6 +10,7 @@ import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const convexBin = path.join(scriptDir, "..", "node_modules", "convex", "bin", "main.js");
+const PROD = process.argv.includes("--prod");
 
 async function generateKeys() {
   const keys = await generateKeyPair("RS256", { extractable: true });
@@ -20,9 +21,13 @@ async function generateKeys() {
 }
 
 function setEnv(name, value) {
-  const res = spawnSync(process.execPath, [convexBin, "env", "set", name, value], {
-    stdio: ["ignore", "inherit", "inherit"],
-  });
+  // El separador "--" evita que valores que empiezan con "-" (p. ej. la clave
+  // PEM "-----BEGIN...") sean interpretados como opciones por el CLI.
+  const res = spawnSync(
+    process.execPath,
+    [convexBin, "env", "set", ...(PROD ? ["--prod"] : []), name, "--", value],
+    { stdio: ["ignore", "inherit", "inherit"] },
+  );
   if (res.status !== 0) {
     console.error(
       `\n❌ No se pudo configurar ${name}.\n` +
@@ -33,8 +38,12 @@ function setEnv(name, value) {
 }
 
 const { JWT_PRIVATE_KEY, JWKS } = await generateKeys();
-console.log("🔑 Configurando claves de autenticación en Convex…\n");
+console.log(
+  `🔑 Configurando claves de autenticación en Convex (${PROD ? "PRODUCCIÓN" : "desarrollo"})…\n`,
+);
 setEnv("JWT_PRIVATE_KEY", JWT_PRIVATE_KEY);
 setEnv("JWKS", JWKS);
-setEnv("SITE_URL", process.env.SITE_URL || "http://localhost:5173");
-console.log("\n✅ Listo. El login ya está habilitado. Recargá la app y creá tu cuenta admin.");
+// SITE_URL: en dev usa localhost; en prod sólo se setea si se provee (la URL de Vercel).
+const siteUrl = process.env.SITE_URL || (PROD ? "" : "http://localhost:5173");
+if (siteUrl) setEnv("SITE_URL", siteUrl);
+console.log("\n✅ Listo. El login ya está habilitado.");

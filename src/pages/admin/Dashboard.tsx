@@ -162,7 +162,7 @@ export default function Dashboard() {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
           <h3 className="font-semibold text-ink-900">Actividad reciente</h3>
-          <Link to="/admin/ventas" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+          <Link to="/admin/movimientos" className="text-sm font-medium text-brand-600 hover:text-brand-700">
             Ver todo
           </Link>
         </div>

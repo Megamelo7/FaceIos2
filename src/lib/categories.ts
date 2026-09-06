@@ -1,6 +1,14 @@
-import { Smartphone, Headphones, Cable, Package, LucideIcon } from "lucide-react";
+import {
+  Smartphone,
+  Tablet,
+  Laptop,
+  Headphones,
+  Cable,
+  Package,
+  LucideIcon,
+} from "lucide-react";
 
-export type Category = "iphone" | "accesorio" | "airpods" | "otro";
+export type Category = "iphone" | "ipad" | "notebook" | "airpods" | "accesorio" | "otro";
 export type Condition = "nuevo" | "usado" | "reacondicionado";
 export type ProductStatus = "disponible" | "reservado" | "agotado" | "oculto";
 export type TxType = "venta" | "compra" | "gasto" | "ingreso";
@@ -10,12 +18,27 @@ export const CATEGORIES: Record<
   { label: string; plural: string; icon: LucideIcon; color: string }
 > = {
   iphone: { label: "iPhone", plural: "iPhones", icon: Smartphone, color: "text-brand-600 bg-brand-50" },
+  ipad: { label: "iPad", plural: "iPads", icon: Tablet, color: "text-sky-600 bg-sky-50" },
+  notebook: { label: "Notebook", plural: "Notebooks", icon: Laptop, color: "text-slate-600 bg-slate-100" },
   airpods: { label: "AirPods", plural: "AirPods", icon: Headphones, color: "text-violet-600 bg-violet-50" },
   accesorio: { label: "Accesorio", plural: "Accesorios", icon: Cable, color: "text-teal-600 bg-teal-50" },
   otro: { label: "Otro", plural: "Otros", icon: Package, color: "text-amber-600 bg-amber-50" },
 };
 
-export const CATEGORY_ORDER: Category[] = ["iphone", "airpods", "accesorio", "otro"];
+export const CATEGORY_ORDER: Category[] = [
+  "iphone",
+  "ipad",
+  "notebook",
+  "airpods",
+  "accesorio",
+  "otro",
+];
+
+/** Categorías que usan el catálogo de modelos (combos). El resto se carga a mano. */
+export type CatalogCategory = "iphone" | "ipad" | "notebook" | "airpods";
+export const CATALOG_CATEGORIES: CatalogCategory[] = ["iphone", "ipad", "notebook", "airpods"];
+export const isCatalogCategory = (c: Category): c is CatalogCategory =>
+  (CATALOG_CATEGORIES as Category[]).includes(c);
 
 export const CONDITIONS: Record<Condition, { label: string; color: string }> = {
   nuevo: { label: "Nuevo", color: "bg-emerald-50 text-emerald-700" },
