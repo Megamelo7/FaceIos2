@@ -2,7 +2,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { FullPageLoader, Field } from "../../components/ui";
-import { Check, Loader2, Store, ShieldCheck } from "lucide-react";
+import { Check, Loader2, Store } from "lucide-react";
 
 export default function Settings() {
   const settings = useQuery(api.settings.getAdmin);
@@ -113,22 +113,6 @@ export default function Settings() {
         </div>
       </form>
 
-      {/* Seguridad */}
-      <div className="card p-6">
-        <div className="mb-3 flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-            <ShieldCheck className="h-5 w-5" />
-          </span>
-          <h3 className="font-semibold text-ink-900">Seguridad del acceso</h3>
-        </div>
-        <p className="text-sm text-ink-600">
-          Para cerrar el registro de nuevas cuentas (recomendado luego de crear tu usuario),
-          definí los emails autorizados desde la terminal:
-        </p>
-        <code className="mt-3 block rounded-xl bg-ink-900 px-4 py-3 font-mono text-xs text-emerald-300">
-          npx convex env set ADMIN_EMAILS "tu@email.com"
-        </code>
-      </div>
     </div>
   );
 }

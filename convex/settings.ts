@@ -5,11 +5,11 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 const KEY = "store";
 
 const DEFAULTS = {
-  storeName: "iPhone Store",
-  whatsapp: "5490000000000",
+  storeName: "FaceIos2",
+  whatsapp: "https://wa.me/qr/VCBMWO6HPZ23B1",
   email: "",
   address: "",
-  instagram: "",
+  instagram: "faceios2",
   currency: "ARS",
   heroTitle: "iPhone, como debe ser.",
   heroSubtitle:

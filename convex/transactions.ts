@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
+import { normalizePhone, normalizeEmail } from "./customers";
 
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   const userId = await getAuthUserId(ctx);
@@ -54,6 +55,15 @@ export const recordSale = mutation({
     quantity: v.number(),
     unitPrice: v.number(),
     paymentMethod: v.optional(v.string()),
+    // Cliente: existente por id, o creado en el momento (nombre, teléfono, email).
+    customerId: v.optional(v.id("customers")),
+    newCustomer: v.optional(
+      v.object({
+        name: v.string(),
+        phone: v.optional(v.string()),
+        email: v.optional(v.string()),
+      }),
+    ),
     customerName: v.optional(v.string()),
     customerContact: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -86,6 +96,39 @@ export const recordSale = mutation({
       });
     }
 
+    // Resolver el cliente: existente, o crearlo (reutiliza si el teléfono ya existe).
+    let customerId = args.customerId;
+    let customerName = args.customerName;
+    let customerContact = args.customerContact;
+    if (!customerId && args.newCustomer) {
+      const name = args.newCustomer.name.trim();
+      if (!name) throw new Error("El nombre del cliente es obligatorio.");
+      const phone = normalizePhone(args.newCustomer.phone);
+      const email = normalizeEmail(args.newCustomer.email);
+      const existing = phone
+        ? await ctx.db
+            .query("customers")
+            .withIndex("by_phone", (q) => q.eq("phone", phone))
+            .first()
+        : null;
+      customerId = existing
+        ? existing._id
+        : await ctx.db.insert("customers", {
+            name,
+            phone,
+            email,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+    }
+    if (customerId) {
+      const c = await ctx.db.get(customerId);
+      if (c) {
+        customerName = c.name;
+        customerContact = c.phone ?? c.email ?? customerContact;
+      }
+    }
+
     const amount = args.unitPrice * args.quantity;
     const profit = (args.unitPrice - unitCost) * args.quantity;
 
@@ -100,8 +143,9 @@ export const recordSale = mutation({
       amount,
       profit,
       paymentMethod: args.paymentMethod,
-      customerName: args.customerName,
-      customerContact: args.customerContact,
+      customerId,
+      customerName,
+      customerContact,
       notes: args.notes,
       date: args.date ?? Date.now(),
       createdBy: userId,

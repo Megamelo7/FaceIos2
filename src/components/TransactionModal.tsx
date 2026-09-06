@@ -2,6 +2,7 @@ import { useState, FormEvent, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Modal, Field } from "./ui";
+import CustomerPicker, { CustomerSelection } from "./CustomerPicker";
 import { TX_META, TxType, PAYMENT_METHODS } from "../lib/categories";
 import { toDateInputValue, fromDateInputValue } from "../lib/format";
 import { useCurrency } from "../lib/useCurrency";
@@ -27,8 +28,7 @@ export default function TransactionModal({ open, onClose, type }: Props) {
   const [amount, setAmount] = useState(""); // gasto/ingreso
   const [updateCost, setUpdateCost] = useState(false);
   const [payment, setPayment] = useState("Efectivo");
-  const [customerName, setCustomerName] = useState("");
-  const [customerContact, setCustomerContact] = useState("");
+  const [customer, setCustomer] = useState<CustomerSelection>(null);
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(toDateInputValue(Date.now()));
   const [error, setError] = useState<string | null>(null);
@@ -62,13 +62,23 @@ export default function TransactionModal({ open, onClose, type }: Props) {
       const when = fromDateInputValue(date);
       if (isSale) {
         if (!productId) throw new Error("Elegí un producto.");
+        if (customer?.kind === "new" && !customer.data.name.trim()) {
+          throw new Error("Ingresá el nombre del cliente (o elegí uno existente).");
+        }
         await recordSale({
           productId: selectedProduct!._id,
           quantity: Number(quantity),
           unitPrice: Number(unitValue),
           paymentMethod: payment,
-          customerName: customerName.trim() || undefined,
-          customerContact: customerContact.trim() || undefined,
+          customerId: customer?.kind === "existing" ? customer.id : undefined,
+          newCustomer:
+            customer?.kind === "new"
+              ? {
+                  name: customer.data.name,
+                  phone: customer.data.phone || undefined,
+                  email: customer.data.email || undefined,
+                }
+              : undefined,
           notes: notes.trim() || undefined,
           date: when,
         });
@@ -227,24 +237,9 @@ export default function TransactionModal({ open, onClose, type }: Props) {
         </div>
 
         {isSale && (
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Cliente (opcional)">
-              <input
-                className="input"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Nombre"
-              />
-            </Field>
-            <Field label="Contacto (opcional)">
-              <input
-                className="input"
-                value={customerContact}
-                onChange={(e) => setCustomerContact(e.target.value)}
-                placeholder="Teléfono / email"
-              />
-            </Field>
-          </div>
+          <Field label="Cliente">
+            <CustomerPicker value={customer} onChange={setCustomer} />
+          </Field>
         )}
 
         <Field label="Notas (opcional)">

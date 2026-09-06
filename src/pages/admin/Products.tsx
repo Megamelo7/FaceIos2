@@ -22,12 +22,15 @@ import {
   Loader2,
 } from "lucide-react";
 
+/** Fila tal como la devuelve `api.products.list` (con URLs de fotos resueltas). */
+type ProductRow = Doc<"products"> & { imageUrls: string[] };
+
 export default function Products() {
   const [category, setCategory] = useState<Category | "all">("all");
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Doc<"products"> | null>(null);
-  const [toDelete, setToDelete] = useState<Doc<"products"> | null>(null);
+  const [editing, setEditing] = useState<ProductRow | null>(null);
+  const [toDelete, setToDelete] = useState<ProductRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const products = useQuery(api.products.list, {
@@ -41,7 +44,7 @@ export default function Products() {
     setEditing(null);
     setFormOpen(true);
   }
-  function openEdit(p: Doc<"products">) {
+  function openEdit(p: ProductRow) {
     setEditing(p);
     setFormOpen(true);
   }
@@ -80,12 +83,15 @@ export default function Products() {
         <FilterChip active={category === "all"} onClick={() => setCategory("all")}>
           Todos
         </FilterChip>
-        {CATEGORY_ORDER.map((c) => (
-          <FilterChip key={c} active={category === c} onClick={() => setCategory(c)}>
-            <CATEGORIES[c].icon className="h-3.5 w-3.5" />
-            {CATEGORIES[c].plural}
-          </FilterChip>
-        ))}
+        {CATEGORY_ORDER.map((c) => {
+          const Icon = CATEGORIES[c].icon;
+          return (
+            <FilterChip key={c} active={category === c} onClick={() => setCategory(c)}>
+              <Icon className="h-3.5 w-3.5" />
+              {CATEGORIES[c].plural}
+            </FilterChip>
+          );
+        })}
       </div>
 
       {/* Tabla */}
@@ -130,9 +136,17 @@ export default function Products() {
                     <tr key={p._id} className="hover:bg-ink-50/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.color}`}>
-                            <meta.icon className="h-4 w-4" />
-                          </span>
+                          {p.imageUrls[0] ? (
+                            <img
+                              src={p.imageUrls[0]}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-lg border border-ink-100 object-cover"
+                            />
+                          ) : (
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.color}`}>
+                              <meta.icon className="h-4 w-4" />
+                            </span>
+                          )}
                           <div className="min-w-0">
                             <p className="flex items-center gap-1.5 font-medium text-ink-900">
                               {p.name}

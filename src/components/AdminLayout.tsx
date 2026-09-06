@@ -6,9 +6,12 @@ import { api } from "../../convex/_generated/api";
 import {
   LayoutDashboard,
   Package,
-  ShoppingCart,
+  ArrowLeftRight,
   Wallet,
+  Layers,
+  Contact,
   Settings as SettingsIcon,
+  Users as UsersIcon,
   LogOut,
   Menu,
   X,
@@ -19,16 +22,22 @@ import {
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/stock", label: "Stock y precios", icon: Package },
-  { to: "/admin/ventas", label: "Ventas", icon: ShoppingCart },
+  { to: "/admin/movimientos", label: "Movimientos", icon: ArrowLeftRight },
+  { to: "/admin/clientes", label: "Clientes", icon: Contact },
   { to: "/admin/finanzas", label: "Finanzas", icon: Wallet },
+  { to: "/admin/modelos", label: "Modelos", icon: Layers },
+  { to: "/admin/usuarios", label: "Usuarios", icon: UsersIcon },
   { to: "/admin/ajustes", label: "Ajustes", icon: SettingsIcon },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/stock": "Stock y precios",
-  "/admin/ventas": "Ventas y transacciones",
+  "/admin/movimientos": "Movimientos",
+  "/admin/clientes": "Clientes",
   "/admin/finanzas": "Finanzas",
+  "/admin/modelos": "Modelos y catálogo",
+  "/admin/usuarios": "Usuarios",
   "/admin/ajustes": "Ajustes",
 };
 

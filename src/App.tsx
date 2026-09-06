@@ -6,9 +6,12 @@ import Login from "./pages/Login";
 import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
 import Products from "./pages/admin/Products";
-import Sales from "./pages/admin/Sales";
+import Movements from "./pages/admin/Movements";
 import Finances from "./pages/admin/Finances";
 import Settings from "./pages/admin/Settings";
+import Users from "./pages/admin/Users";
+import Catalog from "./pages/admin/Catalog";
+import Customers from "./pages/admin/Customers";
 
 function ProtectedRoute() {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -32,8 +35,11 @@ export default function App() {
         <Route element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="stock" element={<Products />} />
-          <Route path="ventas" element={<Sales />} />
+          <Route path="movimientos" element={<Movements />} />
+          <Route path="clientes" element={<Customers />} />
           <Route path="finanzas" element={<Finances />} />
+          <Route path="modelos" element={<Catalog />} />
+          <Route path="usuarios" element={<Users />} />
           <Route path="ajustes" element={<Settings />} />
         </Route>
       </Route>
