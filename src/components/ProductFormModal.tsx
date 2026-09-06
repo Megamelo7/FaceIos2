@@ -1,6 +1,5 @@
 import { useState, FormEvent } from "react";
-import { useMutation, useQuery, useAction } from "convex/react";
-import { ConvexError } from "convex/values";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
@@ -19,7 +18,14 @@ import {
   PAYMENT_METHODS,
 } from "../lib/categories";
 import { toDateInputValue, fromDateInputValue, formatDateTime } from "../lib/format";
-import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
+import {
+  Loader2,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  ExternalLink,
+  ClipboardCheck,
+} from "lucide-react";
 
 /** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
 export type ProductWithImages = Doc<"products"> & { imageUrls: string[] };
@@ -45,7 +51,6 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   const create = useMutation(api.products.create);
   const update = useMutation(api.products.update);
   const catalog = useQuery(api.catalog.list, {}) ?? [];
-  const checkImei = useAction(api.enacom.checkImei);
   const isEdit = !!product;
   const isPurchase = mode === "purchase" && !isEdit;
 
@@ -78,9 +83,8 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   // Datos de la compra (sólo en modo compra).
   const [payment, setPayment] = useState("Efectivo");
   const [purchaseDate, setPurchaseDate] = useState(toDateInputValue(Date.now()));
-  // Consulta de IMEI en ENACOM.
-  const [checking, setChecking] = useState(false);
-  const [checkError, setCheckError] = useState<string | null>(null);
+  // Consulta de IMEI en ENACOM (flujo asistido: copiar IMEI + abrir la página oficial).
+  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,23 +119,37 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
   const canCheckImei = form.category !== "notebook";
   const imeiDigits = form.imei.replace(/\D/g, "");
 
-  async function checkImeiNow() {
-    setCheckError(null);
-    setChecking(true);
+  /**
+   * ENACOM bloquea las conexiones desde redes cloud (Convex/Vercel → timeout),
+   * pero responde desde el navegador del usuario. Flujo asistido: copiamos el
+   * IMEI, abrimos la página oficial y el resultado se registra con un clic.
+   */
+  async function openEnacom() {
     try {
-      const r = await checkImei({ imei: form.imei });
-      set("imeiCheck", {
-        status: r.status,
-        title: r.title,
-        message: r.message,
-        gsma: r.gsma,
-        checkedAt: r.checkedAt,
-      });
-    } catch (err) {
-      setCheckError(err instanceof ConvexError ? String(err.data) : "No se pudo consultar ENACOM.");
-    } finally {
-      setChecking(false);
+      await navigator.clipboard.writeText(imeiDigits);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 5000);
+    } catch {
+      setCopied(false);
     }
+    window.open("https://imei.enacom.gob.ar/", "_blank", "noopener,noreferrer");
+  }
+
+  function setManualResult(status: "valido" | "bloqueado" | null) {
+    if (status === null) {
+      set("imeiCheck", null);
+      return;
+    }
+    set("imeiCheck", {
+      status,
+      title: status === "valido" ? "IMEI Válido" : "IMEI Bloqueado",
+      message:
+        status === "valido"
+          ? "Podés usar el equipo sin problemas."
+          : "El dispositivo figura denunciado por robo, hurto o extravío.",
+      source: "manual",
+      checkedAt: Date.now(),
+    });
   }
 
   function onChangeCategory(category: Category) {
@@ -449,9 +467,8 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                     value={form.imei}
                     onChange={(e) => {
                       set("imei", e.target.value);
-                      // Cambió el número: la consulta anterior ya no aplica.
+                      // Cambió el número: la verificación anterior ya no aplica.
                       set("imeiCheck", null);
-                      setCheckError(null);
                     }}
                     placeholder={canCheckImei ? "15 dígitos · marcá *#06# en el equipo" : "Opcional"}
                     inputMode="numeric"
@@ -460,20 +477,59 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                     <button
                       type="button"
                       className="btn-secondary shrink-0"
-                      onClick={checkImeiNow}
-                      disabled={checking || imeiDigits.length < 14}
-                      title="Consulta oficial en imei.enacom.gob.ar"
+                      onClick={openEnacom}
+                      disabled={imeiDigits.length < 14}
+                      title="Copia el IMEI y abre la consulta oficial de ENACOM en otra pestaña"
                     >
-                      {checking ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                      {copied ? (
+                        <ClipboardCheck className="h-4 w-4 text-emerald-600" />
                       ) : (
-                        <ShieldCheck className="h-4 w-4" />
+                        <ExternalLink className="h-4 w-4" />
                       )}
-                      Consultar ENACOM
+                      Consultar en ENACOM
                     </button>
                   )}
                 </div>
-                {checkError && <p className="mt-1.5 text-xs text-red-600">{checkError}</p>}
+                {canCheckImei && imeiDigits.length >= 14 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500">
+                    <span>
+                      {copied
+                        ? "IMEI copiado: pegalo (Ctrl+V) en ENACOM y cargá acá el resultado:"
+                        : "Cargá acá el resultado que te dio ENACOM:"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setManualResult("valido")}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition-colors ${
+                        form.imeiCheck?.status === "valido"
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
+                      }`}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" /> Válido
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualResult("bloqueado")}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition-colors ${
+                        form.imeiCheck?.status === "bloqueado"
+                          ? "border-red-600 bg-red-600 text-white"
+                          : "border-red-200 bg-white text-red-700 hover:bg-red-50"
+                      }`}
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" /> Bloqueado
+                    </button>
+                    {form.imeiCheck && (
+                      <button
+                        type="button"
+                        onClick={() => setManualResult(null)}
+                        className="text-ink-400 underline hover:text-ink-700"
+                      >
+                        limpiar
+                      </button>
+                    )}
+                  </div>
+                )}
                 {form.imeiCheck && (
                   <div
                     className={`mt-2 rounded-xl px-3.5 py-2.5 text-sm ${
@@ -499,7 +555,9 @@ export default function ProductFormModal({ open, onClose, product, mode }: Props
                       {form.imeiCheck.gsma ? ` · ${form.imeiCheck.gsma}` : ""}
                     </p>
                     <p className="mt-1 text-[11px] opacity-70">
-                      Fuente: ENACOM · {formatDateTime(form.imeiCheck.checkedAt)} ·{" "}
+                      Fuente: ENACOM
+                      {form.imeiCheck.source === "manual" ? " (verificado a mano)" : ""} ·{" "}
+                      {formatDateTime(form.imeiCheck.checkedAt)} ·{" "}
                       <a
                         href="https://imei.enacom.gob.ar/"
                         target="_blank"

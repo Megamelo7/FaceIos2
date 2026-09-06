@@ -45,6 +45,8 @@ export default defineSchema({
         title: v.string(),
         message: v.string(),
         gsma: v.optional(v.string()),
+        // "manual": el usuario consultó en la página oficial y cargó el resultado a mano.
+        source: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
         checkedAt: v.number(),
       }),
     ),

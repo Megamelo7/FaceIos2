@@ -1,10 +1,17 @@
 "use node";
 import { v, ConvexError } from "convex/values";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
  * Consulta oficial de IMEI en ENACOM (https://imei.enacom.gob.ar/).
+ *
+ * ⚠️ HALLAZGO (2026-09): ENACOM descarta las conexiones desde redes cloud —
+ * desde Convex (AWS EE. UU.) y desde Vercel gru1 (AWS São Paulo) el TCP a
+ * :443 da UND_ERR_CONNECT_TIMEOUT; desde una IP argentina responde normal.
+ * Por eso el panel usa un flujo asistido (copiar IMEI + abrir la página +
+ * cargar el resultado a mano). Esta action queda como implementación de
+ * referencia del protocolo, utilizable si algún día hay un relay en Argentina.
  *
  * La página es una app Laravel Livewire v3 sin CAPTCHA. Replicamos su
  * protocolo: GET (cookies + token CSRF + snapshot del componente) y luego
@@ -36,6 +43,49 @@ function unwrap(value: unknown): unknown {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** Resume un error de red de forma legible (código de la causa si existe). */
+function describeError(err: unknown): string {
+  const e = err as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  return e?.cause?.code ?? e?.cause?.message ?? e?.name ?? e?.message ?? "error desconocido";
+}
+
+/**
+ * Diagnóstico (sólo CLI): intenta el GET inicial a ENACOM desde el runtime de
+ * Convex y devuelve el detalle del error, para saber si es bloqueo, TLS, etc.
+ *   npx convex run enacom:diag
+ */
+export const diag = internalAction({
+  args: {},
+  handler: async () => {
+    const started = Date.now();
+    try {
+      const r = await fetch(`${BASE}/`, {
+        headers: { "User-Agent": UA, Accept: "text/html" },
+        signal: AbortSignal.timeout(15000),
+      });
+      const text = await r.text();
+      return {
+        ok: r.ok,
+        status: r.status,
+        ms: Date.now() - started,
+        server: r.headers.get("server"),
+        hasSnapshot: /wire:snapshot=/.test(text),
+        hasCsrf: /csrf-token/.test(text),
+        preview: text.replace(/\s+/g, " ").slice(0, 200),
+      };
+    } catch (err) {
+      const e = err as { name?: string; message?: string; cause?: unknown };
+      return {
+        ok: false,
+        ms: Date.now() - started,
+        name: e?.name,
+        message: e?.message,
+        cause: e?.cause ? JSON.parse(JSON.stringify(e.cause, Object.getOwnPropertyNames(e.cause))) : null,
+      };
+    }
+  },
+});
+
 export type ImeiCheckResult = {
   status: "valido" | "bloqueado" | "error";
   title: string;
@@ -60,9 +110,15 @@ export const checkImei = action({
     // 1) GET: cookies + CSRF + snapshot del componente Livewire.
     let r1: Response;
     try {
-      r1 = await fetch(`${BASE}/`, { headers: { "User-Agent": UA, Accept: "text/html" } });
-    } catch {
-      throw new ConvexError("No se pudo conectar con ENACOM. Probá de nuevo en unos segundos.");
+      r1 = await fetch(`${BASE}/`, {
+        headers: { "User-Agent": UA, Accept: "text/html" },
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err) {
+      console.error("ENACOM GET failed:", err);
+      throw new ConvexError(
+        `No se pudo conectar con ENACOM (${describeError(err)}). Probá de nuevo en unos segundos.`,
+      );
     }
     const html = await r1.text();
     const cookies = setCookies(r1.headers)

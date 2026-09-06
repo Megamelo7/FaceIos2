@@ -47,6 +47,7 @@ const imeiCheckValidator = v.optional(
     title: v.string(),
     message: v.string(),
     gsma: v.optional(v.string()),
+    source: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
     checkedAt: v.number(),
   }),
 );
