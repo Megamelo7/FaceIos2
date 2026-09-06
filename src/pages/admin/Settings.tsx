@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { FullPageLoader, Field } from "../../components/ui";
+import { CURRENCIES } from "../../lib/currencies";
 import { Check, Loader2, Store } from "lucide-react";
 
 export default function Settings() {
@@ -71,8 +72,22 @@ export default function Settings() {
           <Field label="Nombre de la tienda">
             <input className="input" value={form.storeName} onChange={(e) => set("storeName", e.target.value)} />
           </Field>
-          <Field label="Moneda" hint="Código ISO: ARS, USD, etc.">
-            <input className="input" value={form.currency} onChange={(e) => set("currency", e.target.value.toUpperCase())} />
+          <Field label="Moneda" hint="Se usa para mostrar precios, totales y el balance.">
+            <select
+              className="input"
+              value={form.currency}
+              onChange={(e) => set("currency", e.target.value)}
+            >
+              {/* Si hay un código guardado que no está en la lista, se conserva como opción. */}
+              {form.currency && !CURRENCIES.some((c) => c.code === form.currency) && (
+                <option value={form.currency}>{form.currency}</option>
+              )}
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="WhatsApp" hint="Con código de país, sin +. Ej: 5491112345678">
             <input className="input" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} />

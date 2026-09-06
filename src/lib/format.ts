@@ -1,3 +1,5 @@
+import { currencySymbol } from "./currencies";
+
 export function formatCurrency(value: number, currency = "ARS"): string {
   try {
     return new Intl.NumberFormat("es-AR", {
@@ -6,17 +8,20 @@ export function formatCurrency(value: number, currency = "ARS"): string {
       maximumFractionDigits: 0,
     }).format(value ?? 0);
   } catch {
-    return `$ ${Math.round(value ?? 0).toLocaleString("es-AR")}`;
+    // Monedas sin código ISO (p. ej. USDT): símbolo + número.
+    return `${currencySymbol(currency)} ${Math.round(value ?? 0).toLocaleString("es-AR")}`;
   }
 }
 
-/** Versión compacta: $1,2M / $980k */
+/** Versión compacta: $1,2M / US$980k */
 export function formatCurrencyShort(value: number, currency = "ARS"): string {
   const abs = Math.abs(value);
-  const symbol = currency === "USD" ? "US$" : "$";
-  if (abs >= 1_000_000) return `${symbol}${(value / 1_000_000).toFixed(1).replace(".0", "")}M`;
-  if (abs >= 1_000) return `${symbol}${Math.round(value / 1_000)}k`;
-  return `${symbol}${Math.round(value)}`;
+  const symbol = currencySymbol(currency);
+  const sep = /[A-Za-z]$/.test(symbol) ? " " : "";
+  if (abs >= 1_000_000)
+    return `${symbol}${sep}${(value / 1_000_000).toFixed(1).replace(".0", "")}M`;
+  if (abs >= 1_000) return `${symbol}${sep}${Math.round(value / 1_000)}k`;
+  return `${symbol}${sep}${Math.round(value)}`;
 }
 
 export function formatNumber(value: number): string {
