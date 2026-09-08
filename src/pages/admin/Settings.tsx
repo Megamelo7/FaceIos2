@@ -1,13 +1,18 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { FullPageLoader, Field } from "../../components/ui";
+import { Id } from "../../../convex/_generated/dataModel";
+import { FullPageLoader, Field, Modal } from "../../components/ui";
 import { CURRENCIES } from "../../lib/currencies";
-import { Check, Loader2, Store } from "lucide-react";
+import { Check, Loader2, Store, Upload, Trash2 } from "lucide-react";
+
+const MAX_LOGO_MB = 4;
 
 export default function Settings() {
   const settings = useQuery(api.settings.getAdmin);
   const update = useMutation(api.settings.update);
+  const generateLogoUploadUrl = useMutation(api.settings.generateLogoUploadUrl);
+  const setLogo = useMutation(api.settings.setLogo);
 
   const [form, setForm] = useState({
     storeName: "",
@@ -21,6 +26,11 @@ export default function Settings() {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -39,19 +49,68 @@ export default function Settings() {
 
   if (settings === undefined) return <FullPageLoader label="Cargando ajustes…" />;
 
+  const logoUrl = settings.logoUrl || "";
+
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  async function onSubmit(e: FormEvent) {
+  // Guardar pide confirmación antes de aplicar los cambios.
+  function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setSaved(false);
+    setConfirmOpen(true);
+  }
+
+  async function doSave() {
+    setConfirmOpen(false);
+    setSaving(true);
     try {
       await update(form);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onPickLogo(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setLogoError("El archivo tiene que ser una imagen.");
+      return;
+    }
+    if (file.size > MAX_LOGO_MB * 1024 * 1024) {
+      setLogoError(`La imagen no puede superar los ${MAX_LOGO_MB} MB.`);
+      return;
+    }
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      const uploadUrl = await generateLogoUploadUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error("upload failed");
+      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      await setLogo({ storageId });
+    } catch {
+      setLogoError("No se pudo subir el logo. Probá de nuevo.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      await setLogo({ storageId: null });
+    } finally {
+      setLogoBusy(false);
     }
   }
 
@@ -66,6 +125,52 @@ export default function Settings() {
             <h3 className="font-semibold text-ink-900">Datos de la tienda</h3>
             <p className="text-xs text-ink-500">Se usan en la landing pública y el panel.</p>
           </div>
+        </div>
+
+        {/* Logo de la organización: se aplica al instante, en la tienda y en el panel. */}
+        <div className="mb-6 rounded-2xl border border-ink-200 bg-ink-50/60 p-4">
+          <p className="label">Logo de la organización</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex h-16 w-32 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ink-200 bg-white px-2">
+              <img
+                src={logoUrl || "/logo.png"}
+                alt="Logo actual"
+                className="max-h-12 w-auto max-w-full object-contain"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={logoBusy}
+                onClick={() => logoInput.current?.click()}
+              >
+                {logoBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {logoUrl ? "Cambiar logo" : "Subir logo"}
+              </button>
+              {logoUrl && (
+                <button type="button" className="btn-danger" disabled={logoBusy} onClick={removeLogo}>
+                  <Trash2 className="h-4 w-4" /> Quitar
+                </button>
+              )}
+              <input
+                ref={logoInput}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onPickLogo}
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-ink-400">
+            PNG o SVG con fondo transparente. Hasta {MAX_LOGO_MB} MB. Sin logo propio se usa el
+            de FaceIos2.
+          </p>
+          {logoError && <p className="mt-2 text-xs text-red-600">{logoError}</p>}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -128,6 +233,28 @@ export default function Settings() {
         </div>
       </form>
 
+      {/* Confirmación antes de guardar */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Guardar cambios"
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setConfirmOpen(false)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn-primary" onClick={doSave}>
+              <Check className="h-4 w-4" /> Sí, guardar
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-600">
+          Los datos de la tienda se van a actualizar en la landing pública y en el panel. ¿Deseás
+          continuar?
+        </p>
+      </Modal>
     </div>
   );
 }

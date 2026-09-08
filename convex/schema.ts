@@ -134,5 +134,7 @@ export default defineSchema({
     currency: v.optional(v.string()),
     heroTitle: v.optional(v.string()),
     heroSubtitle: v.optional(v.string()),
+    // Logo de la organización subido desde Ajustes. Si no hay, se usa /logo.png.
+    logoId: v.optional(v.id("_storage")),
   }).index("by_key", ["key"]),
 });

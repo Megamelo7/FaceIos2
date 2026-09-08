@@ -52,9 +52,10 @@ export default function AdminLayout() {
     <div className="flex h-full flex-col">
       <div className="px-5 py-5">
         <div className="w-fit rounded-xl bg-white px-3 py-2">
-          <img src="/logo.png" alt={storeName} className="h-9 w-auto" />
+          <img src={settings?.logoUrl || "/logo.png"} alt={storeName} className="h-9 w-auto" />
         </div>
         <p className="mt-2 truncate text-xs text-ink-500">Panel de gestión · {storeName}</p>
+        <p className="mt-0.5 text-xs text-ink-600">V {__APP_VERSION__}</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-3">

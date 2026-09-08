@@ -18,7 +18,13 @@ import {
   Instagram,
   ChevronRight,
   BatteryCharging,
+  Images,
+  LifeBuoy,
 } from "lucide-react";
+import ImageViewer from "../components/ImageViewer";
+
+/** WhatsApp de soporte técnico del sitio (distinto al de ventas de la tienda). */
+const SUPPORT_WHATSAPP = "5491152577608";
 
 type PublicProduct = {
   _id: string;
@@ -51,6 +57,7 @@ export default function Landing() {
   const settings = useQuery(api.settings.get);
 
   const storeName = settings?.storeName ?? "iPhone Store";
+  const logo = settings?.logoUrl || "/logo.png";
   const whatsapp = settings?.whatsapp ?? "";
   const heroTitle = settings?.heroTitle ?? "iPhone, como debe ser.";
   const heroSubtitle =
@@ -72,7 +79,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/80 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
           <a href="#top" className="flex items-center" aria-label={storeName}>
-            <img src="/logo.png" alt={storeName} className="h-10 w-auto" />
+            <img src={logo} alt={storeName} className="h-10 w-auto" />
           </a>
           <nav className="hidden items-center gap-7 text-sm font-medium text-ink-600 md:flex">
             <a href="#catalogo" className="hover:text-ink-900">Catálogo</a>
@@ -107,7 +114,7 @@ export default function Landing() {
         <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-6 text-center sm:pb-24 sm:pt-10">
           {/* El logo ES el hero: grande, sobre fondo blanco. */}
           <img
-            src="/logo.png"
+            src={logo}
             alt={storeName}
             className="mx-auto w-full max-w-2xl sm:max-w-3xl"
           />
@@ -236,9 +243,21 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-ink-100 bg-white">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-ink-500 sm:flex-row">
-          <img src="/logo.png" alt={storeName} className="h-8 w-auto" />
+          <img src={logo} alt={storeName} className="h-8 w-auto" />
           <p>© {new Date().getFullYear()} · Todos los derechos reservados</p>
-          <Link to="/login" className="hover:text-ink-800">Acceso al panel</Link>
+          <div className="flex items-center gap-4">
+            <a
+              href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
+                `Hola! Necesito soporte con el sitio de ${storeName}.`,
+              )}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-ink-800"
+            >
+              <LifeBuoy className="h-4 w-4" /> Soporte
+            </a>
+            <Link to="/login" className="hover:text-ink-800">Acceso al panel</Link>
+          </div>
         </div>
       </footer>
     </div>
@@ -257,6 +276,7 @@ function ProductCard({
   const meta = CATEGORIES[product.category];
   const cond = CONDITIONS[product.condition];
   const [active, setActive] = useState(0);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const mainImage = product.imageUrls[active] ?? product.imageUrls[0];
   const specs = [product.storage, product.color].filter(Boolean).join(" · ");
   const msg = `Hola ${storeName}! Me interesa el ${product.name}${
@@ -265,32 +285,52 @@ function ProductCard({
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-lg">
-      {/* Imagen */}
+      {/* Imagen: se puede abrir a pantalla completa para ver el detalle con zoom. */}
       <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-ink-100 to-ink-50">
         {mainImage ? (
-          <img
-            src={mainImage}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            className="block h-full w-full cursor-pointer"
+            aria-label={`Ver fotos de ${product.name}`}
+          >
+            <img
+              src={mainImage}
+              alt={product.name}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              loading="lazy"
+            />
+            <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-ink-950/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+              <Images className="h-3.5 w-3.5" /> Ver fotos
+            </span>
+          </button>
         ) : (
           <div className="flex h-full items-center justify-center text-ink-300">
             <meta.icon className="h-16 w-16" />
           </div>
         )}
-        <div className="absolute left-3 top-3 flex gap-2">
+        <div className="pointer-events-none absolute left-3 top-3 flex gap-2">
           <span className={`badge ${cond.color}`}>{cond.label}</span>
           {product.featured && (
             <span className="badge bg-ink-900 text-white">Destacado</span>
           )}
         </div>
         {!product.inStock && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
             <span className="badge bg-ink-900 text-white">Sin stock · Consultar</span>
           </div>
         )}
       </div>
+
+      {zoomOpen && (
+        <ImageViewer
+          images={product.imageUrls}
+          index={active}
+          alt={product.name}
+          onIndexChange={setActive}
+          onClose={() => setZoomOpen(false)}
+        />
+      )}
 
       {/* Miniaturas (cuando hay varias fotos) */}
       {product.imageUrls.length > 1 && (

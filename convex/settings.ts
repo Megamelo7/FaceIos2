@@ -16,16 +16,20 @@ const DEFAULTS = {
     "Equipos nuevos y usados, con garantía y los mejores accesorios. Consultá disponibilidad y precio.",
 };
 
+/** Config guardada + la URL del logo resuelta desde el storage. */
+async function readSettings(ctx: QueryCtx) {
+  const doc = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", KEY))
+    .unique();
+  const logoUrl = doc?.logoId ? await ctx.storage.getUrl(doc.logoId) : null;
+  return { ...DEFAULTS, ...(doc ?? {}), logoUrl: logoUrl ?? "" };
+}
+
 /** Configuración pública de la tienda (para la landing). */
 export const get = query({
   args: {},
-  handler: async (ctx) => {
-    const doc = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", KEY))
-      .unique();
-    return { ...DEFAULTS, ...(doc ?? {}) };
-  },
+  handler: async (ctx) => readSettings(ctx),
 });
 
 /** Actualiza la configuración (requiere sesión). */
@@ -65,10 +69,42 @@ export const getAdmin = query({
   args: {},
   handler: async (ctx) => {
     await requireAuthCtx(ctx);
-    const doc = await ctx.db
+    return await readSettings(ctx);
+  },
+});
+
+/** URL para subir el logo de la organización a Convex Storage. */
+export const generateLogoUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("No autorizado.");
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Guarda (o quita, con `null`) el logo de la organización.
+ * El archivo anterior se borra del storage para no dejar huérfanos.
+ */
+export const setLogo = mutation({
+  args: { storageId: v.union(v.id("_storage"), v.null()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("No autorizado.");
+    const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", KEY))
       .unique();
-    return { ...DEFAULTS, ...(doc ?? {}) };
+
+    const previous = existing?.logoId;
+    if (existing) {
+      await ctx.db.patch(existing._id, { logoId: args.storageId ?? undefined });
+    } else if (args.storageId) {
+      await ctx.db.insert("settings", { key: KEY, logoId: args.storageId });
+    }
+    if (previous && previous !== args.storageId) {
+      await ctx.storage.delete(previous);
+    }
   },
 });
