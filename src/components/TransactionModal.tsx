@@ -117,6 +117,7 @@ export default function TransactionModal({
           quantity: Number(quantity),
           unitPrice: unitStore,
           fxRate: fx.fxRate,
+          fxAmount: fx.inArs ? totalInput : undefined,
           paymentMethod: payment,
           customerId: customer?.kind === "existing" ? customer.id : undefined,
           newCustomer:
@@ -137,6 +138,7 @@ export default function TransactionModal({
           quantity: Number(quantity),
           unitCost: unitStore,
           fxRate: fx.fxRate,
+          fxAmount: fx.inArs ? totalInput : undefined,
           updateCost,
           paymentMethod: payment,
           notes: notes.trim() || undefined,
@@ -148,6 +150,7 @@ export default function TransactionModal({
           type: type as "gasto" | "ingreso",
           amount: fx.toStore(Number(amount)),
           fxRate: fx.fxRate,
+          fxAmount: fx.inArs ? totalInput : undefined,
           concept: concept.trim(),
           paymentMethod: payment,
           notes: notes.trim() || undefined,

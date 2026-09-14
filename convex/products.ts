@@ -70,6 +70,8 @@ const purchaseFields = {
   purchaseNotes: v.optional(v.string()),
   // Precios cargados en pesos: cotización usada (ARS por US$).
   purchaseFxRate: v.optional(v.number()),
+  // Costo unitario tal como se cargó en pesos (para guardar el monto original exacto).
+  purchaseFxUnitCost: v.optional(v.number()),
 };
 
 /* ─────────────────────────── Reglas del IMEI ─────────────────────────── */
@@ -163,6 +165,7 @@ type PurchaseInput = {
   purchaseDate?: number;
   purchaseNotes?: string;
   purchaseFxRate?: number;
+  purchaseFxUnitCost?: number;
 };
 
 /**
@@ -200,7 +203,13 @@ async function insertProduct(
       date: purchase.purchaseDate ?? now,
       createdBy: userId,
       createdAt: now,
-      ...fxFields(fields.costPrice * unit.quantity, purchase.purchaseFxRate),
+      ...fxFields(
+        fields.costPrice * unit.quantity,
+        purchase.purchaseFxRate,
+        purchase.purchaseFxUnitCost === undefined
+          ? undefined
+          : purchase.purchaseFxUnitCost * unit.quantity,
+      ),
     });
   }
   return id;
@@ -300,15 +309,23 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     await assertImei(ctx, args.category, args.imei);
-    const { imei, quantity, paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate, ...fields } =
-      args;
+    const {
+      imei,
+      quantity,
+      paymentMethod,
+      purchaseDate,
+      purchaseNotes,
+      purchaseFxRate,
+      purchaseFxUnitCost,
+      ...fields
+    } = args;
     return await insertProduct(
       ctx,
       userId,
       fields,
       // Un equipo con IMEI es un artículo único: siempre 1 unidad.
       { quantity: requiresImei(args.category) ? 1 : quantity, imei },
-      { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate },
+      { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate, purchaseFxUnitCost },
     );
   },
 });
@@ -341,6 +358,7 @@ export const createBatch = mutation({
       purchaseDate,
       purchaseNotes,
       purchaseFxRate,
+      purchaseFxUnitCost,
       ...fields
     } = args;
     void _ignored;
@@ -352,7 +370,7 @@ export const createBatch = mutation({
           userId,
           fields,
           { quantity: 1, imei },
-          { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate },
+          { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate, purchaseFxUnitCost },
         ),
       );
     }

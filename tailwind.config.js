@@ -51,7 +51,7 @@ const brand = {
 
 // Tono claro → tono que lo reemplaza en oscuro.
 const TINT_DARK = { 50: 950, 100: 900, 200: 800, 600: 400, 700: 300, 800: 200 };
-const TINTED = { red: colors.red, emerald: colors.emerald, amber: colors.amber, sky: colors.sky, violet: colors.violet, orange: colors.orange, slate: colors.slate };
+const TINTED = { red: colors.red, emerald: colors.emerald, amber: colors.amber, sky: colors.sky, violet: colors.violet, orange: colors.orange, slate: colors.slate, teal: colors.teal };
 
 const rgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);

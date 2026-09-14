@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
@@ -16,7 +16,7 @@ import {
   MessageCircle,
   Lock,
   Instagram,
-  ChevronRight,
+  ArrowRight,
   BatteryCharging,
   Images,
   LifeBuoy,
@@ -25,6 +25,14 @@ import ImageViewer from "../components/ImageViewer";
 
 /** WhatsApp de soporte técnico del sitio (distinto al de ventas de la tienda). */
 const SUPPORT_WHATSAPP = "5491152577608";
+const DEFAULT_LOGO = "/logo.png";
+
+// Estilo MAT: fondo casi negro, bordes blancos translúcidos y botones redondeados.
+const accentBtn =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_34px_-10px_rgba(99,102,241,0.7)] transition-colors hover:bg-brand-600";
+const subtleBtn =
+  "inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/[0.09]";
+const navLink = "font-medium text-white/60 transition-colors hover:text-white";
 
 type PublicProduct = {
   _id: string;
@@ -52,12 +60,45 @@ function waLink(whatsapp: string, text: string) {
   return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
 }
 
+/**
+ * El logo por defecto es negro sobre transparente: en fondo oscuro se muestra
+ * en blanco. Un logo propio (Ajustes) va sobre una placa blanca para no
+ * alterar sus colores.
+ */
+function StoreLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
+  if (src === DEFAULT_LOGO) {
+    return <img src={src} alt={alt} className={`${className} brightness-0 invert`} />;
+  }
+  return (
+    <span className="inline-flex rounded-xl bg-white px-2 py-1">
+      <img src={src} alt={alt} className={className} />
+    </span>
+  );
+}
+
+function SectionEyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-white/50">
+      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+      {children}
+    </span>
+  );
+}
+
 export default function Landing() {
   const products = useQuery(api.products.listPublic) as PublicProduct[] | undefined;
   const settings = useQuery(api.settings.get);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    onScroll();
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const storeName = settings?.storeName ?? "iPhone Store";
-  const logo = settings?.logoUrl || "/logo.png";
+  const logo = settings?.logoUrl || DEFAULT_LOGO;
   const whatsapp = settings?.whatsapp ?? "";
   const heroTitle = settings?.heroTitle ?? "iPhone, como debe ser.";
   const heroSubtitle =
@@ -73,114 +114,142 @@ export default function Landing() {
     items: sorted.filter((p) => p.category === cat),
   })).filter((g) => g.items.length > 0);
 
+  const consultLink = waLink(whatsapp, `Hola ${storeName}! Quería hacer una consulta.`);
+
   return (
-    <div className="min-h-screen bg-white text-ink-900">
-      {/* Nav */}
-      <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/80 backdrop-blur-lg">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-          <a href="#top" className="flex items-center" aria-label={storeName}>
-            <img src={logo} alt={storeName} className="h-10 w-auto" />
-          </a>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-ink-600 md:flex">
-            <a href="#catalogo" className="hover:text-ink-900">Catálogo</a>
-            <a href="#nosotros" className="hover:text-ink-900">Por qué nosotros</a>
-            <a href="#contacto" className="hover:text-ink-900">Contacto</a>
-          </nav>
-          <div className="flex items-center gap-2">
-            {whatsapp && (
-              <a
-                href={waLink(whatsapp, `Hola ${storeName}! Quería hacer una consulta.`)}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-dark hidden sm:inline-flex"
-              >
-                <MessageCircle className="h-4 w-4" /> Consultar
-              </a>
-            )}
-            <Link
-              to="/login"
-              className="btn-ghost"
-              title="Acceso al panel"
-            >
-              <Lock className="h-4 w-4" />
-              <span className="hidden sm:inline">Acceso</span>
-            </Link>
+    <main className="relative min-h-screen overflow-x-hidden bg-[#08080A] text-white antialiased">
+      {/* Fondo ambiental */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_42%_at_50%_-8%,rgba(99,102,241,0.18),transparent_60%),radial-gradient(40%_30%_at_85%_8%,rgba(99,102,241,0.08),transparent_70%)]" />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[820px] opacity-[0.16]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+          maskImage: "radial-gradient(70% 60% at 50% 0%, black, transparent 75%)",
+          WebkitMaskImage: "radial-gradient(70% 60% at 50% 0%, black, transparent 75%)",
+        }}
+      />
+
+      {/* Nav flotante */}
+      <header className="fixed inset-x-0 top-0 z-40 px-3 pt-3 sm:px-5 sm:pt-5">
+        <div
+          className={`mx-auto rounded-[1.6rem] border border-white/10 bg-[#0B0B0D]/70 px-4 shadow-[0_14px_36px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-300 ${
+            scrolled ? "max-w-5xl py-2.5" : "max-w-7xl py-3"
+          }`}
+        >
+          <div className="relative flex items-center justify-between gap-3">
+            <a href="#top" className="shrink-0 px-2" aria-label={storeName}>
+              <StoreLogo src={logo} alt={storeName} className="h-8 w-auto" />
+            </a>
+
+            <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm md:flex">
+              <a href="#catalogo" className={`${navLink} px-3`}>Catálogo</a>
+              <a href="#nosotros" className={`${navLink} px-3`}>Por qué nosotros</a>
+              <a href="#contacto" className={`${navLink} px-3`}>Contacto</a>
+            </nav>
+
+            <div className="flex items-center gap-2">
+              <Link to="/login" className={`${subtleBtn} px-3 py-2 text-xs sm:px-4 sm:text-sm`} title="Acceso al panel">
+                <Lock className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Acceso</span>
+              </Link>
+              {consultLink && (
+                <a
+                  href={consultLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`${accentBtn} px-3 py-2 text-xs sm:px-4 sm:text-sm`}
+                >
+                  Consultar
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       {/* Hero */}
-      <section id="top" className="relative overflow-hidden bg-white">
-        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-6 text-center sm:pb-24 sm:pt-10">
-          {/* El logo ES el hero: grande, sobre fondo blanco. */}
-          <img
+      <section id="top" className="relative">
+        <div className="mx-auto max-w-6xl px-4 pb-12 pt-28 text-center sm:px-6 sm:pt-36">
+          <StoreLogo
             src={logo}
             alt={storeName}
-            className="mx-auto w-full max-w-2xl sm:max-w-3xl"
+            className="mx-auto h-auto w-full max-w-xs animate-fade-in sm:max-w-md"
           />
-          <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-ink-200 bg-ink-50 px-4 py-1.5 text-xs font-medium text-ink-700">
-            <BadgeCheck className="h-4 w-4 text-brand-600" /> Equipos con garantía
-          </span>
-          <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold leading-tight tracking-tight text-ink-900 sm:text-5xl">
+
+          <div className="mx-auto mt-8 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1 text-xs text-white/70 backdrop-blur-xl sm:text-sm">
+            <BadgeCheck className="h-4 w-4 text-brand-400" />
+            Equipos con garantía
+          </div>
+
+          <h1 className="mx-auto mt-6 max-w-4xl text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.04em] sm:text-6xl">
             {heroTitle}
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-ink-600">{heroSubtitle}</p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a href="#catalogo" className="btn-primary px-6 py-3 text-base">
-              Ver catálogo <ChevronRight className="h-4 w-4" />
+          <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-white/60 sm:text-lg">
+            {heroSubtitle}
+          </p>
+
+          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a href="#catalogo" className={`${accentBtn} px-6 py-3 text-base`}>
+              Ver catálogo <ArrowRight className="h-4 w-4" />
             </a>
             {whatsapp && (
               <a
                 href={waLink(whatsapp, `Hola ${storeName}! Quería consultar precios y disponibilidad.`)}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-dark px-6 py-3 text-base"
+                className={`${subtleBtn} px-6 py-3 text-base`}
               >
-                <MessageCircle className="h-4 w-4" /> Consultar por WhatsApp
+                Consultar por WhatsApp <MessageCircle className="h-4 w-4" />
               </a>
             )}
           </div>
+          <p className="mt-3 text-xs text-white/45">Precio y disponibilidad al instante</p>
         </div>
       </section>
 
       {/* Beneficios */}
-      <section id="nosotros" className="border-b border-ink-100 bg-ink-50">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-5 py-12 sm:grid-cols-3">
+      <div id="nosotros" className="relative mx-auto max-w-5xl scroll-mt-28 px-4 py-10 sm:px-6 sm:py-14">
+        <div className="grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] sm:grid-cols-3">
           {[
             { icon: ShieldCheck, title: "Garantía real", desc: "Todos los equipos con garantía y prueba antes de comprar." },
             { icon: BadgeCheck, title: "Calidad verificada", desc: "Nuevos, usados y reacondicionados en excelente estado." },
             { icon: Truck, title: "Entrega rápida", desc: "Coordinamos entrega en el día según tu zona." },
           ].map((b) => (
-            <div key={b.title} className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-brand-600 shadow-sm">
+            <div key={b.title} className="flex items-start gap-3 bg-[#0A0A0C] p-6">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-brand-400">
                 <b.icon className="h-5 w-5" />
               </span>
               <div>
-                <p className="font-semibold text-ink-900">{b.title}</p>
-                <p className="text-sm text-ink-500">{b.desc}</p>
+                <p className="font-semibold tracking-[-0.01em]">{b.title}</p>
+                <p className="mt-0.5 text-sm leading-6 text-white/55">{b.desc}</p>
               </div>
             </div>
           ))}
         </div>
-      </section>
+      </div>
 
       {/* Catálogo */}
-      <section id="catalogo" className="mx-auto max-w-6xl px-5 py-16">
-        <div className="mb-10 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">Nuestro catálogo</h2>
-          <p className="mt-2 text-ink-500">
+      <section id="catalogo" className="relative mx-auto max-w-6xl scroll-mt-28 px-4 py-14 sm:px-6 sm:py-20">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <SectionEyebrow>Catálogo</SectionEyebrow>
+          <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+            Nuestro catálogo
+          </h2>
+          <p className="mt-4 text-base leading-7 text-white/60">
             Consultá el precio y la disponibilidad actualizada por WhatsApp.
           </p>
         </div>
 
         {products === undefined ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-80 animate-pulse rounded-2xl bg-ink-100" />
+              <div key={i} className="h-80 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
             ))}
           </div>
         ) : byCategory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-ink-200 py-20 text-center text-ink-500">
+          <div className="rounded-2xl border border-dashed border-white/15 py-20 text-center text-white/55">
             Todavía no hay productos publicados. Volvé pronto.
           </div>
         ) : (
@@ -189,14 +258,14 @@ export default function Landing() {
               const meta = CATEGORIES[cat];
               return (
                 <div key={cat}>
-                  <div className="mb-5 flex items-center gap-2.5">
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${meta.color}`}>
+                  <div className="mb-5 flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-brand-400">
                       <meta.icon className="h-5 w-5" />
                     </span>
-                    <h3 className="text-xl font-bold text-ink-900">{meta.plural}</h3>
-                    <span className="text-sm text-ink-400">({items.length})</span>
+                    <h3 className="text-xl font-semibold tracking-[-0.02em]">{meta.plural}</h3>
+                    <span className="text-sm text-white/40">{items.length}</span>
                   </div>
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((p) => (
                       <ProductCard key={p._id} product={p} whatsapp={whatsapp} storeName={storeName} />
                     ))}
@@ -209,42 +278,46 @@ export default function Landing() {
       </section>
 
       {/* Contacto / CTA final */}
-      <section id="contacto" className="bg-ink-950 text-white">
-        <div className="mx-auto max-w-6xl px-5 py-16 text-center">
-          <h2 className="text-3xl font-bold">¿Querés saber el precio?</h2>
-          <p className="mx-auto mt-3 max-w-lg text-ink-300">
-            Escribinos y te pasamos precio, disponibilidad y formas de pago al instante.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            {whatsapp && (
-              <a
-                href={waLink(whatsapp, `Hola ${storeName}! Quería hacer una consulta.`)}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-primary px-6 py-3 text-base"
-              >
-                <MessageCircle className="h-5 w-5" /> Escribir por WhatsApp
-              </a>
-            )}
-            {settings?.instagram && (
-              <a
-                href={`https://instagram.com/${settings.instagram}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-secondary px-6 py-3 text-base"
-              >
-                <Instagram className="h-5 w-5" /> @{settings.instagram}
-              </a>
-            )}
+      <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+        <section
+          id="contacto"
+          className="relative scroll-mt-28 overflow-hidden rounded-[2rem] border border-white/10 bg-[#0C0C0E] px-6 py-12 sm:px-10 sm:py-16"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_80%_at_50%_0%,rgba(99,102,241,0.18),transparent_70%)]" />
+          <div className="relative mx-auto max-w-2xl text-center">
+            <SectionEyebrow>Contacto</SectionEyebrow>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+              ¿Querés saber el precio?
+            </h2>
+            <p className="mt-4 text-base leading-7 text-white/65">
+              Escribinos y te pasamos precio, disponibilidad y formas de pago al instante.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              {consultLink && (
+                <a href={consultLink} target="_blank" rel="noreferrer" className={`${accentBtn} px-6 py-3 text-base`}>
+                  Escribir por WhatsApp <MessageCircle className="h-4 w-4" />
+                </a>
+              )}
+              {settings?.instagram && (
+                <a
+                  href={`https://instagram.com/${settings.instagram}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`${subtleBtn} px-6 py-3 text-base`}
+                >
+                  <Instagram className="h-4 w-4" /> @{settings.instagram}
+                </a>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Footer */}
-      <footer className="border-t border-ink-100 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-ink-500 sm:flex-row">
-          <img src={logo} alt={storeName} className="h-8 w-auto" />
-          <p>© {new Date().getFullYear()} · Todos los derechos reservados</p>
+      <footer className="relative border-t border-white/[0.08] px-4 py-10 pb-28 sm:px-6 sm:pb-12">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 text-center text-sm text-white/45 sm:flex-row sm:justify-between sm:text-left">
+          <StoreLogo src={logo} alt={storeName} className="h-7 w-auto opacity-90" />
+          <p>© {new Date().getFullYear()} {storeName} · Todos los derechos reservados</p>
           <div className="flex items-center gap-4">
             <a
               href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
@@ -252,15 +325,31 @@ export default function Landing() {
               )}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-ink-800"
+              className={`${navLink} inline-flex items-center gap-1.5`}
             >
               <LifeBuoy className="h-4 w-4" /> Soporte
             </a>
-            <Link to="/login" className="hover:text-ink-800">Acceso al panel</Link>
+            <Link to="/login" className={navLink}>Acceso al panel</Link>
           </div>
         </div>
       </footer>
-    </div>
+
+      {/* WhatsApp flotante */}
+      {consultLink && (
+        <a
+          href={consultLink}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Consultar por WhatsApp"
+          className="fixed bottom-4 right-4 z-50 inline-flex items-center gap-3 rounded-full border border-white/12 bg-[#121214]/90 p-3 text-sm font-medium text-white shadow-[0_18px_45px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-transform duration-200 hover:-translate-y-0.5 sm:bottom-5 sm:right-5 sm:px-4"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white">
+            <MessageCircle className="h-5 w-5" />
+          </span>
+          <span className="hidden sm:block">Consultar</span>
+        </a>
+      )}
+    </main>
   );
 }
 
@@ -284,9 +373,9 @@ function ProductCard({
   }. ¿Está disponible y qué precio tiene?`;
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-lg">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] transition-colors hover:border-white/20 hover:bg-white/[0.04]">
       {/* Imagen: se puede abrir a pantalla completa para ver el detalle con zoom. */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-ink-100 to-ink-50">
+      <div className="relative aspect-[4/3] overflow-hidden bg-white/[0.03]">
         {mainImage ? (
           <button
             type="button"
@@ -300,24 +389,22 @@ function ProductCard({
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               loading="lazy"
             />
-            <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-ink-950/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
               <Images className="h-3.5 w-3.5" /> Ver fotos
             </span>
           </button>
         ) : (
-          <div className="flex h-full items-center justify-center text-ink-300">
+          <div className="flex h-full items-center justify-center text-white/20">
             <meta.icon className="h-16 w-16" />
           </div>
         )}
         <div className="pointer-events-none absolute left-3 top-3 flex gap-2">
           <span className={`badge ${cond.color}`}>{cond.label}</span>
-          {product.featured && (
-            <span className="badge bg-ink-900 text-white">Destacado</span>
-          )}
+          {product.featured && <span className="badge bg-brand-500 text-white">Destacado</span>}
         </div>
         {!product.inStock && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
-            <span className="badge bg-ink-900 text-white">Sin stock · Consultar</span>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
+            <span className="badge border border-white/15 bg-white/10 text-white">Sin stock · Consultar</span>
           </div>
         )}
       </div>
@@ -341,9 +428,7 @@ function ProductCard({
               type="button"
               onClick={() => setActive(i)}
               className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
-                i === active
-                  ? "border-brand-500"
-                  : "border-transparent opacity-70 hover:opacity-100"
+                i === active ? "border-brand-400" : "border-transparent opacity-60 hover:opacity-100"
               }`}
               aria-label={`Foto ${i + 1}`}
             >
@@ -355,10 +440,10 @@ function ProductCard({
 
       {/* Info */}
       <div className="flex flex-1 flex-col p-5">
-        <h4 className="font-semibold text-ink-900">{product.name}</h4>
-        {specs && <p className="mt-0.5 text-sm text-ink-500">{specs}</p>}
+        <h4 className="font-semibold tracking-[-0.01em]">{product.name}</h4>
+        {specs && <p className="mt-0.5 text-sm text-white/55">{specs}</p>}
         {(product.batteryHealth || product.batteryType) && (
-          <p className="mt-1 inline-flex items-center gap-1 text-xs text-ink-400">
+          <p className="mt-1 inline-flex items-center gap-1 text-xs text-white/45">
             <BatteryCharging className="h-3.5 w-3.5" />
             {product.batteryHealth ? `Batería ${product.batteryHealth}%` : "Batería"}
             {product.batteryType
@@ -367,18 +452,13 @@ function ProductCard({
           </p>
         )}
         {product.description && (
-          <p className="mt-2 line-clamp-2 text-sm text-ink-500">{product.description}</p>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/55">{product.description}</p>
         )}
         <div className="mt-4 flex-1" />
-        <a
-          href={waLink(whatsapp, msg)}
-          target="_blank"
-          rel="noreferrer"
-          className="btn-dark w-full"
-        >
+        <a href={waLink(whatsapp, msg)} target="_blank" rel="noreferrer" className={`${subtleBtn} w-full`}>
           <MessageCircle className="h-4 w-4" /> Consultar precio
         </a>
       </div>
-    </div>
+    </article>
   );
 }

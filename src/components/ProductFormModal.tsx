@@ -209,7 +209,10 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
       const purchase = isPurchase
         ? { paymentMethod: payment, purchaseDate: fromDateInputValue(purchaseDate) }
         : {};
-      const fxRate = { purchaseFxRate: fx.fxRate };
+      const fxRate = {
+        purchaseFxRate: fx.fxRate,
+        purchaseFxUnitCost: fx.inArs ? Number(form.costPrice) : undefined,
+      };
       const payload = {
         name: form.name.trim(),
         category: form.category,

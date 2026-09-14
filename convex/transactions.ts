@@ -14,12 +14,14 @@ async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
 
 /**
  * Cargado en pesos: el front ya convirtió los importes a dólares; acá se
- * guarda la cotización y el monto original en ARS (`amount` × cotización).
+ * guarda la cotización y el monto original en ARS (el que se tipeó; si no
+ * viene, `amount` × cotización).
  */
-export function fxFields(amount: number, fxRate: number | undefined) {
+export function fxFields(amount: number, fxRate: number | undefined, fxAmount?: number) {
   if (fxRate === undefined) return {};
   if (!(fxRate > 0)) throw new ConvexError("La cotización debe ser mayor a 0.");
-  return { fxCurrency: "ARS", fxRate, fxAmount: Math.round(amount * fxRate * 100) / 100 };
+  const ars = fxAmount ?? amount * fxRate;
+  return { fxCurrency: "ARS", fxRate, fxAmount: Math.round(ars * 100) / 100 };
 }
 
 /** Recalcula el estado del producto según su cantidad (sin pisar "reservado"/"oculto"). */
@@ -79,6 +81,7 @@ export const recordSale = mutation({
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
     fxRate: v.optional(v.number()),
+    fxAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -161,7 +164,7 @@ export const recordSale = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
-      ...fxFields(amount, args.fxRate),
+      ...fxFields(amount, args.fxRate, args.fxAmount),
     });
   },
 });
@@ -178,6 +181,7 @@ export const recordPurchase = mutation({
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
     fxRate: v.optional(v.number()),
+    fxAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -218,7 +222,7 @@ export const recordPurchase = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
-      ...fxFields(args.unitCost * args.quantity, args.fxRate),
+      ...fxFields(args.unitCost * args.quantity, args.fxRate, args.fxAmount),
     });
   },
 });
@@ -233,6 +237,7 @@ export const recordManual = mutation({
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
     fxRate: v.optional(v.number()),
+    fxAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -247,7 +252,7 @@ export const recordManual = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
-      ...fxFields(args.amount, args.fxRate),
+      ...fxFields(args.amount, args.fxRate, args.fxAmount),
     });
   },
 });

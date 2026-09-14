@@ -189,25 +189,35 @@ export const setInitialPassword = action({
       profile: { email, name: user.name ?? "" },
       shouldLinkViaEmail: true,
     });
-    await ctx.runMutation(internal.users.finishPasswordSetup, {
+    const linked: boolean = await ctx.runMutation(internal.users.finishPasswordSetup, {
       userId: user._id,
       createdUserId: created.user._id,
     });
+    if (!linked) {
+      throw new ConvexError(
+        "No se pudo crear la contraseña. Pedile al administrador que te invite de nuevo.",
+      );
+    }
     return null;
   },
 });
 
-/** Marca la contraseña como creada (y deshace un alta duplicada si no se vinculó). */
+/**
+ * Marca la contraseña como creada. Si `createAccount` no la vinculó al
+ * invitado, borra el alta duplicada y devuelve false: no lanza acá, porque un
+ * error revertiría el borrado (el error lo lanza la action).
+ */
 export const finishPasswordSetup = internalMutation({
   args: { userId: v.id("users"), createdUserId: v.id("users") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<boolean> => {
     if (args.createdUserId !== args.userId) {
       await deleteAccounts(ctx, args.createdUserId);
       await deleteSessions(ctx, args.createdUserId);
       await ctx.db.delete(args.createdUserId);
-      throw new ConvexError("No se pudo crear la contraseña. Pedile al administrador que te invite de nuevo.");
+      return false;
     }
     await ctx.db.patch(args.userId, { mustSetPassword: undefined });
+    return true;
   },
 });
 

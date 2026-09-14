@@ -22,11 +22,13 @@
     <meta name="twitter:card" content="summary_large_image" />
     <title>FaceIos2 — Apple Store</title>
     <script>
-      // Aplica el modo oscuro del panel antes de pintar (ver src/lib/theme.ts).
+      // Aplica el modo oscuro antes de pintar (ver src/lib/theme.ts):
+      // la tienda siempre; el panel y el login salvo que el usuario eligiera claro.
       try {
         var p = location.pathname;
         var t = localStorage.getItem("faceios2-theme");
-        if (t !== "light" && (p.indexOf("/admin") === 0 || p.indexOf("/login") === 0)) {
+        var panel = p.indexOf("/admin") === 0 || p.indexOf("/login") === 0;
+        if (!panel || t !== "light") {
           document.documentElement.classList.add("dark");
         }
       } catch (e) {}
