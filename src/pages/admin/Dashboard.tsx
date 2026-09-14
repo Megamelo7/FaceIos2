@@ -18,12 +18,16 @@ import {
 
 export default function Dashboard() {
   const data = useQuery(api.dashboard.overview);
+  const me = useQuery(api.users.list)?.find((u) => u.isMe);
+  const userName = me?.name || me?.email.split("@")[0] || "";
   const { money } = useCurrency();
 
   if (data === undefined) return <FullPageLoader label="Cargando panel…" />;
 
   return (
     <div className="space-y-6">
+      {userName && <h2 className="text-2xl font-bold text-ink-900">Hola, {userName}</h2>}
+
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
