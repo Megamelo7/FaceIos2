@@ -6,7 +6,7 @@ import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
 import TransactionModal from "../../components/TransactionModal";
 import ProductFormModal from "../../components/ProductFormModal";
 import { useCurrency } from "../../lib/useCurrency";
-import { formatDate, formatCurrency } from "../../lib/format";
+import { formatDate } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
 import {
   Plus,
@@ -38,7 +38,7 @@ export default function Movements() {
     limit: 200,
   });
   const remove = useMutation(api.transactions.remove);
-  const { money } = useCurrency();
+  const { money, moneyIn } = useCurrency();
 
   async function confirmDelete() {
     if (!toDelete) return;
@@ -182,7 +182,7 @@ export default function Movements() {
                         {money(t.amount)}
                         {t.fxAmount !== undefined && (
                           <span className="block text-xs font-normal text-ink-400">
-                            {formatCurrency(t.fxAmount, "ARS")} · cot. {t.fxRate}
+                            {moneyIn(t.fxAmount, "ARS")} · cot. {t.fxRate}
                           </span>
                         )}
                       </td>

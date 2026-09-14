@@ -11,9 +11,10 @@ function initialTheme(): Theme {
     const saved = localStorage.getItem(KEY);
     if (saved === "light" || saved === "dark") return saved;
   } catch {
-    // localStorage bloqueado: se usa el tema del sistema.
+    // localStorage bloqueado: queda el tema por defecto.
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // Por defecto oscuro, salvo que el usuario haya elegido claro.
+  return "dark";
 }
 
 let current: Theme = initialTheme();
@@ -28,7 +29,7 @@ function setTheme(theme: Theme) {
   listeners.forEach((l) => l());
 }
 
-/** Tema claro/oscuro del panel (arranca con el del sistema, recuerda la elección). */
+/** Tema claro/oscuro del panel (arranca oscuro, recuerda la elección). */
 export function useTheme() {
   const theme = useSyncExternalStore(
     (cb) => {

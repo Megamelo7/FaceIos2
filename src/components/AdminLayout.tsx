@@ -21,7 +21,10 @@ import {
   PanelLeftOpen,
   Sun,
   Moon,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import { useHideAmounts } from "../lib/useCurrency";
 
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -60,6 +63,7 @@ export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { hidden: amountsHidden, toggle: toggleAmounts } = useHideAmounts();
   const location = useLocation();
   const settings = useQuery(api.settings.getAdmin);
   const storeName = settings?.storeName ?? "iPhone Store";
@@ -87,7 +91,7 @@ export default function AdminLayout() {
         {!compact && (
           <>
             <p className="mt-2 truncate text-xs text-ink-500">Panel de gestión · {storeName}</p>
-            <p className="mt-0.5 text-xs text-ink-600">V {__APP_VERSION__}</p>
+            <p className="mt-0.5 text-xs text-ink-600">V {settings?.appVersion?.trim() || __APP_VERSION__}</p>
           </>
         )}
       </div>
@@ -186,6 +190,15 @@ export default function AdminLayout() {
           </button>
           <h1 className="text-lg font-bold text-ink-900">{title}</h1>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              className="btn-secondary px-2.5"
+              onClick={toggleAmounts}
+              aria-label={amountsHidden ? "Mostrar importes" : "Ocultar importes"}
+              aria-pressed={amountsHidden}
+              title={amountsHidden ? "Mostrar importes" : "Ocultar importes"}
+            >
+              {amountsHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
             <button
               className="btn-secondary px-2.5"
               onClick={toggleTheme}

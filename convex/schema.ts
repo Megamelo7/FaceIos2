@@ -159,5 +159,7 @@ export default defineSchema({
     heroSubtitle: v.optional(v.string()),
     // Logo de la organización subido desde Ajustes. Si no hay, se usa /logo.png.
     logoId: v.optional(v.id("_storage")),
+    // Versión del sistema que se muestra en el menú del panel (ej. "1.0.3").
+    appVersion: v.optional(v.string()),
   }).index("by_key", ["key"]),
 });

@@ -5,7 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
 import CustomerPicker, { CustomerSelection } from "./CustomerPicker";
 import { TX_META, TxType, PAYMENT_METHODS } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue, formatCurrency } from "../lib/format";
+import { toDateInputValue, fromDateInputValue } from "../lib/format";
 import { useCurrency } from "../lib/useCurrency";
 import FxFields, { useFx, InputCurrency } from "./FxFields";
 import { Loader2 } from "lucide-react";
@@ -31,7 +31,7 @@ export default function TransactionModal({
   const recordSale = useMutation(api.transactions.recordSale);
   const recordPurchase = useMutation(api.transactions.recordPurchase);
   const recordManual = useMutation(api.transactions.recordManual);
-  const { money } = useCurrency();
+  const { money, moneyIn } = useCurrency();
   const fx = useFx();
 
   const [productId, setProductId] = useState("");
@@ -324,7 +324,7 @@ export default function TransactionModal({
             <span className="block text-lg font-bold">{money(total)}</span>
             {fx.inArs && (
               <span className="block text-xs font-medium opacity-80">
-                {formatCurrency(totalInput, "ARS")}
+                {moneyIn(totalInput, "ARS")}
               </span>
             )}
           </span>

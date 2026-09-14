@@ -23,6 +23,7 @@ export default function Settings() {
     currency: "ARS",
     heroTitle: "",
     heroSubtitle: "",
+    appVersion: "",
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,6 +44,7 @@ export default function Settings() {
         currency: settings.currency ?? "ARS",
         heroTitle: settings.heroTitle ?? "",
         heroSubtitle: settings.heroSubtitle ?? "",
+        appVersion: settings.appVersion ?? "",
       });
     }
   }, [settings]);
@@ -205,6 +207,14 @@ export default function Settings() {
           </Field>
           <Field label="Dirección / Zona">
             <input className="input" value={form.address} onChange={(e) => set("address", e.target.value)} />
+          </Field>
+          <Field label="Versión del sistema" hint="Se muestra en el menú del panel.">
+            <input
+              className="input"
+              value={form.appVersion}
+              onChange={(e) => set("appVersion", e.target.value)}
+              placeholder={__APP_VERSION__}
+            />
           </Field>
         </div>
 
