@@ -25,7 +25,9 @@ import ImageViewer from "../components/ImageViewer";
 
 /** WhatsApp de soporte técnico del sitio (distinto al de ventas de la tienda). */
 const SUPPORT_WHATSAPP = "5491152577608";
-const DEFAULT_LOGO = "/logo.png";
+const DEFAULT_LOGO = "/logo.png"; // si la tienda no subió un logo propio en Ajustes
+// Versión para fondo oscuro: letras blancas y la manzana plateada (scripts/makeDarkLogo.ps1).
+const DARK_LOGO = "/logo-dark.png";
 
 // Estilo MAT: fondo casi negro, bordes blancos translúcidos y botones redondeados.
 const accentBtn =
@@ -61,18 +63,31 @@ function waLink(whatsapp: string, text: string) {
 }
 
 /**
- * El logo por defecto es negro sobre fondo blanco (opaco): invertido queda
- * blanco sobre negro, y `mix-blend-screen` hace desaparecer el negro contra el
- * fondo oscuro. Un logo propio (Ajustes) va sobre una placa blanca para no
- * alterar sus colores.
+ * Logo de FaceIos2: la versión oscura (letras blancas, manzana plateada) sin
+ * placa, ocupando el mismo tamaño que tendría con placa (`size`). Un logo propio
+ * (Ajustes) va sobre una placa blanca para no alterar sus colores.
  */
-function StoreLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
+function StoreLogo({
+  src,
+  alt,
+  size,
+  plateImg,
+  plate = "rounded-xl px-2.5 py-1.5",
+}: {
+  src: string;
+  alt: string;
+  /** Tamaño del logo oscuro (igual al tamaño exterior de la placa). */
+  size: string;
+  /** Tamaño de la imagen dentro de la placa (logo propio). */
+  plateImg: string;
+  plate?: string;
+}) {
   if (src === DEFAULT_LOGO) {
-    return <img src={src} alt={alt} className={`${className} invert mix-blend-screen`} />;
+    return <img src={DARK_LOGO} alt={alt} className={size} />;
   }
   return (
-    <span className="inline-flex rounded-xl bg-white px-2 py-1">
-      <img src={src} alt={alt} className={className} />
+    <span className={`inline-flex bg-white ${plate}`}>
+      <img src={src} alt={alt} className={plateImg} />
     </span>
   );
 }
@@ -141,7 +156,7 @@ export default function Landing() {
         >
           <div className="relative flex items-center justify-between gap-3">
             <a href="#top" className="shrink-0 px-2" aria-label={storeName}>
-              <StoreLogo src={logo} alt={storeName} className="h-8 w-auto" />
+              <StoreLogo src={logo} alt={storeName} size="h-12 w-auto" plateImg="h-9 w-auto" />
             </a>
 
             <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm md:flex">
@@ -176,7 +191,9 @@ export default function Landing() {
           <StoreLogo
             src={logo}
             alt={storeName}
-            className="mx-auto h-auto w-full max-w-xs animate-fade-in sm:max-w-md"
+            size="mx-auto h-auto w-[21rem] animate-fade-in sm:w-[37rem]"
+            plateImg="h-auto w-72 sm:w-[32rem]"
+            plate="animate-fade-in rounded-3xl px-6 py-5 shadow-[0_30px_80px_-30px_rgba(99,102,241,0.45)] sm:px-10 sm:py-8"
           />
 
           <div className="mx-auto mt-8 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1 text-xs text-white/70 backdrop-blur-xl sm:text-sm">
@@ -317,7 +334,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="relative border-t border-white/[0.08] px-4 py-10 pb-28 sm:px-6 sm:pb-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 text-center text-sm text-white/45 sm:flex-row sm:justify-between sm:text-left">
-          <StoreLogo src={logo} alt={storeName} className="h-7 w-auto opacity-90" />
+          <StoreLogo src={logo} alt={storeName} size="h-10 w-auto opacity-90" plateImg="h-7 w-auto" />
           <p>© {new Date().getFullYear()} {storeName} · Todos los derechos reservados</p>
           <div className="flex items-center gap-4">
             <a

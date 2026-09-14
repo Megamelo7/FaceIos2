@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { query, mutation, internalMutation, QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 const KEY = "store";
@@ -43,7 +43,6 @@ export const update = mutation({
     currency: v.optional(v.string()),
     heroTitle: v.optional(v.string()),
     heroSubtitle: v.optional(v.string()),
-    appVersion: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -57,6 +56,28 @@ export const update = mutation({
       return existing._id;
     }
     return await ctx.db.insert("settings", { key: KEY, ...args });
+  },
+});
+
+/**
+ * Versión del sistema que muestra el menú del panel. No se edita desde el
+ * panel: sólo desde Convex (CLI o dashboard).
+ *   npx convex run settings:setVersion '{"version":"1.0.3"}'          (dev)
+ *   npx convex run settings:setVersion '{"version":"1.0.3"}' --prod   (producción)
+ */
+export const setVersion = internalMutation({
+  args: { version: v.string() },
+  handler: async (ctx, args) => {
+    const appVersion = args.version.trim() || undefined;
+    const existing = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", KEY))
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { appVersion });
+      return existing._id;
+    }
+    return await ctx.db.insert("settings", { key: KEY, appVersion });
   },
 });
 
