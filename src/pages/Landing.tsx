@@ -61,13 +61,14 @@ function waLink(whatsapp: string, text: string) {
 }
 
 /**
- * El logo por defecto es negro sobre transparente: en fondo oscuro se muestra
- * en blanco. Un logo propio (Ajustes) va sobre una placa blanca para no
+ * El logo por defecto es negro sobre fondo blanco (opaco): invertido queda
+ * blanco sobre negro, y `mix-blend-screen` hace desaparecer el negro contra el
+ * fondo oscuro. Un logo propio (Ajustes) va sobre una placa blanca para no
  * alterar sus colores.
  */
 function StoreLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
   if (src === DEFAULT_LOGO) {
-    return <img src={src} alt={alt} className={`${className} brightness-0 invert`} />;
+    return <img src={src} alt={alt} className={`${className} invert mix-blend-screen`} />;
   }
   return (
     <span className="inline-flex rounded-xl bg-white px-2 py-1">
