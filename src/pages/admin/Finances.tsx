@@ -14,6 +14,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import { StatCard, FullPageLoader } from "../../components/ui";
 import { useCurrency } from "../../lib/useCurrency";
+import { useTheme } from "../../lib/theme";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -41,6 +42,7 @@ function periodFrom(period: Period): number | undefined {
 export default function Finances() {
   const [period, setPeriod] = useState<Period>("6m");
   const { money, moneyShort } = useCurrency();
+  const { isDark } = useTheme();
 
   const from = useMemo(() => periodFrom(period), [period]);
   const summary = useQuery(api.finances.summary, { from });
@@ -60,8 +62,8 @@ export default function Finances() {
             onClick={() => setPeriod(p.key)}
             className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
               period === p.key
-                ? "bg-ink-900 text-white"
-                : "bg-white text-ink-600 border border-ink-200 hover:border-ink-300"
+                ? "bg-ink-900 text-ink-50"
+                : "bg-surface text-ink-600 border border-ink-200 hover:border-ink-300"
             }`}
           >
             {p.label}
@@ -107,7 +109,7 @@ export default function Finances() {
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#243044" : "#e2e8f0"} vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
               <YAxis
                 tick={{ fontSize: 12, fill: "#94a3b8" }}
@@ -120,7 +122,9 @@ export default function Finances() {
                 formatter={(value, name) => [money(Number(value)), name]}
                 contentStyle={{
                   borderRadius: 12,
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid rgb(var(--c-ink-200))",
+                  background: "rgb(var(--c-surface))",
+                  color: "rgb(var(--c-ink-900))",
                   fontSize: 13,
                   boxShadow: "0 10px 30px -12px rgb(2 6 23 / 0.25)",
                 }}

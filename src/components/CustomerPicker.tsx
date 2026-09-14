@@ -97,7 +97,7 @@ export default function CustomerPicker({ value, onChange }: Props) {
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
-      <div className="max-h-44 overflow-y-auto rounded-xl border border-ink-200 bg-white">
+      <div className="max-h-44 overflow-y-auto rounded-xl border border-ink-200 bg-surface">
         {results.map((c) => (
           <button
             type="button"

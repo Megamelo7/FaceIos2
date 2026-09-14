@@ -68,7 +68,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen bg-ink-100">
       {/* Panel de marca */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-ink-950 p-12 text-white lg:flex">
+      <div className="relative hidden w-1/2 flex-col justify-between ink-light overflow-hidden bg-ink-950 p-12 text-white lg:flex">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           style={{

@@ -21,6 +21,17 @@
     <meta property="og:image" content="https://faceios2.vercel.app/logo.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <title>FaceIos2 — Apple Store</title>
+    <script>
+      // Aplica el modo oscuro del panel antes de pintar (ver src/lib/theme.ts).
+      try {
+        var p = location.pathname;
+        var t = localStorage.getItem("faceios2-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        if (t === "dark" && (p.indexOf("/admin") === 0 || p.indexOf("/login") === 0)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

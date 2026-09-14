@@ -1,6 +1,8 @@
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useConvexAuth } from "convex/react";
 import { FullPageLoader } from "./components/ui";
+import { useTheme } from "./lib/theme";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import AdminLayout from "./components/AdminLayout";
@@ -26,7 +28,18 @@ function ProtectedRoute() {
   return <Outlet />;
 }
 
+/** El modo oscuro aplica sólo al panel y al login; la tienda pública queda clara. */
+function useThemeScope() {
+  const { pathname } = useLocation();
+  const { isDark } = useTheme();
+  useEffect(() => {
+    const panel = pathname.startsWith("/admin") || pathname.startsWith("/login");
+    document.documentElement.classList.toggle("dark", isDark && panel);
+  }, [pathname, isDark]);
+}
+
 export default function App() {
+  useThemeScope();
   return (
     <Routes>
       <Route path="/" element={<Landing />} />

@@ -90,11 +90,11 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-ink-950/40 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
       <div
-        className={`relative z-10 w-full ${width} max-h-[92vh] overflow-hidden rounded-t-3xl bg-white shadow-card-lg animate-fade-in sm:rounded-2xl`}
+        className={`relative z-10 w-full ${width} max-h-[92vh] overflow-hidden rounded-t-3xl bg-surface shadow-card-lg animate-fade-in sm:rounded-2xl`}
       >
         {title && (
           <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
@@ -131,7 +131,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white/50 px-6 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-surface/50 px-6 py-14 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-ink-100 text-ink-400">
         <Icon className="h-6 w-6" />
       </div>

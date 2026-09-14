@@ -44,10 +44,10 @@ export default function ImageViewer({ images, index, alt = "", onIndexChange, on
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className="relative z-10 flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-card-lg animate-fade-in"
+        className="relative z-10 flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-surface shadow-card-lg animate-fade-in"
         role="dialog"
         aria-modal="true"
         aria-label={alt || "Fotos del producto"}
@@ -87,7 +87,7 @@ export default function ImageViewer({ images, index, alt = "", onIndexChange, on
               <button
                 type="button"
                 onClick={() => go(-1)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-ink-700 shadow-sm hover:bg-white"
+                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-ink-700 shadow-sm hover:bg-surface"
                 aria-label="Foto anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -95,7 +95,7 @@ export default function ImageViewer({ images, index, alt = "", onIndexChange, on
               <button
                 type="button"
                 onClick={() => go(1)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-ink-700 shadow-sm hover:bg-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-ink-700 shadow-sm hover:bg-surface"
                 aria-label="Foto siguiente"
               >
                 <ChevronRight className="h-5 w-5" />

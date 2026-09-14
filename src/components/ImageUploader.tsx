@@ -141,7 +141,7 @@ export default function ImageUploader({ value, onChange, max = 8 }: Props) {
             : "Hacé clic para elegir fotos, arrastralas acá"}
         </p>
         <p className="text-xs text-ink-400">
-          o pegalas directamente con <kbd className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] shadow-sm">Ctrl+V</kbd>
+          o pegalas directamente con <kbd className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] shadow-sm">Ctrl+V</kbd>
           {" · "}hasta {max} fotos
         </p>
         <input
@@ -174,14 +174,14 @@ export default function ImageUploader({ value, onChange, max = 8 }: Props) {
                 </div>
               )}
               {i === 0 && (
-                <span className="absolute left-1 top-1 rounded-full bg-ink-900/85 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                <span className="absolute left-1 top-1 rounded-full bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                   Principal
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => removeImage(img)}
-                className="absolute right-1 top-1 rounded-full bg-white/95 p-1 text-ink-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600"
+                className="absolute right-1 top-1 rounded-full bg-surface/95 p-1 text-ink-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600"
                 aria-label="Quitar foto"
                 title="Quitar foto"
               >

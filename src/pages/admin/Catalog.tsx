@@ -92,8 +92,8 @@ export default function Catalog() {
               onClick={() => setActive(c)}
               className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 active === c
-                  ? "bg-ink-900 text-white"
-                  : "bg-white text-ink-600 border border-ink-200 hover:border-ink-300"
+                  ? "bg-ink-900 text-ink-50"
+                  : "bg-surface text-ink-600 border border-ink-200 hover:border-ink-300"
               }`}
             >
               <meta.icon className="h-3.5 w-3.5" />
