@@ -19,6 +19,7 @@ import {
   PAYMENT_METHODS,
 } from "../lib/categories";
 import { toDateInputValue, fromDateInputValue } from "../lib/format";
+import FxFields, { useFx, InputCurrency } from "./FxFields";
 import { isImeiFormat, normalizeImei, parseImeis } from "../lib/imei";
 import { Loader2 } from "lucide-react";
 
@@ -88,6 +89,16 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
   const [purchaseDate, setPurchaseDate] = useState(toDateInputValue(Date.now()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Precios cargados en pesos: se graban en dólares con la cotización.
+  const fx = useFx();
+
+  function onFxCurrencyChange(to: InputCurrency) {
+    setForm((f) => ({
+      ...f,
+      costPrice: fx.convertInput(f.costPrice, to),
+      salePrice: fx.convertInput(f.salePrice, to),
+    }));
+  }
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -192,11 +203,13 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
         "Todos los IMEIs deben tener exactamente 15 dígitos: revisá los marcados en rojo.",
       );
     if (imeiListDup) return setError("Hay IMEIs repetidos: cada unidad debe tener el suyo.");
+    if (fx.error) return setError(fx.error);
     setSaving(true);
     try {
       const purchase = isPurchase
         ? { paymentMethod: payment, purchaseDate: fromDateInputValue(purchaseDate) }
         : {};
+      const fxRate = { purchaseFxRate: fx.fxRate };
       const payload = {
         name: form.name.trim(),
         category: form.category,
@@ -207,8 +220,8 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
         color: form.color.trim() || undefined,
         batteryHealth: num(form.batteryHealth),
         batteryType: form.batteryType || undefined,
-        costPrice: Number(form.costPrice),
-        salePrice: Number(form.salePrice),
+        costPrice: fx.toStore(Number(form.costPrice)),
+        salePrice: fx.toStore(Number(form.salePrice)),
         minStock: num(form.minStock),
         status: form.status,
         featured: form.featured,
@@ -224,9 +237,9 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
       } else if (multiImei) {
         // Un artículo por IMEI (1 unidad cada uno).
         if (imeiList.length === 1) {
-          await create({ ...payload, imei: imeiList[0], quantity: 1, ...purchase });
+          await create({ ...payload, imei: imeiList[0], quantity: 1, ...purchase, ...fxRate });
         } else {
-          await createBatch({ ...payload, imeis: imeiList, ...purchase });
+          await createBatch({ ...payload, imeis: imeiList, ...purchase, ...fxRate });
         }
       } else {
         await create({
@@ -234,6 +247,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
           imei: singleImei,
           quantity: Number(form.quantity) || 0,
           ...purchase,
+          ...fxRate,
         });
       }
       onClose();
@@ -553,8 +567,13 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
 
         {/* Precios */}
         <div className="rounded-2xl bg-ink-50 p-4">
+          {fx.enabled && (
+            <div className="mb-4">
+              <FxFields fx={fx} onCurrencyChange={onFxCurrencyChange} />
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="Costo (compra)">
+            <Field label={fx.inArs ? "Costo (compra, ARS)" : "Costo (compra)"}>
               <input
                 className="input"
                 type="number"
@@ -563,7 +582,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
                 placeholder="0"
               />
             </Field>
-            <Field label="Precio de venta">
+            <Field label={fx.inArs ? "Precio de venta (ARS)" : "Precio de venta"}>
               <input
                 className="input"
                 type="number"

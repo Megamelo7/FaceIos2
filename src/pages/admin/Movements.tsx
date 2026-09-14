@@ -6,7 +6,7 @@ import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
 import TransactionModal from "../../components/TransactionModal";
 import ProductFormModal from "../../components/ProductFormModal";
 import { useCurrency } from "../../lib/useCurrency";
-import { formatDate } from "../../lib/format";
+import { formatDate, formatCurrency } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
 import {
   Plus,
@@ -180,6 +180,11 @@ export default function Movements() {
                       >
                         {meta.sign > 0 ? "+" : "−"}
                         {money(t.amount)}
+                        {t.fxAmount !== undefined && (
+                          <span className="block text-xs font-normal text-ink-400">
+                            {formatCurrency(t.fxAmount, "ARS")} · cot. {t.fxRate}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-ink-500">
                         {t.type === "venta" && t.profit !== undefined ? (

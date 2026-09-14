@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { fxFields } from "./transactions";
 
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   const userId = await getAuthUserId(ctx);
@@ -67,6 +68,8 @@ const purchaseFields = {
   paymentMethod: v.optional(v.string()),
   purchaseDate: v.optional(v.number()),
   purchaseNotes: v.optional(v.string()),
+  // Precios cargados en pesos: cotización usada (ARS por US$).
+  purchaseFxRate: v.optional(v.number()),
 };
 
 /* ─────────────────────────── Reglas del IMEI ─────────────────────────── */
@@ -159,6 +162,7 @@ type PurchaseInput = {
   paymentMethod?: string;
   purchaseDate?: number;
   purchaseNotes?: string;
+  purchaseFxRate?: number;
 };
 
 /**
@@ -196,6 +200,7 @@ async function insertProduct(
       date: purchase.purchaseDate ?? now,
       createdBy: userId,
       createdAt: now,
+      ...fxFields(fields.costPrice * unit.quantity, purchase.purchaseFxRate),
     });
   }
   return id;
@@ -295,14 +300,15 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     await assertImei(ctx, args.category, args.imei);
-    const { imei, quantity, paymentMethod, purchaseDate, purchaseNotes, ...fields } = args;
+    const { imei, quantity, paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate, ...fields } =
+      args;
     return await insertProduct(
       ctx,
       userId,
       fields,
       // Un equipo con IMEI es un artículo único: siempre 1 unidad.
       { quantity: requiresImei(args.category) ? 1 : quantity, imei },
-      { paymentMethod, purchaseDate, purchaseNotes },
+      { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate },
     );
   },
 });
@@ -329,7 +335,14 @@ export const createBatch = mutation({
     }
     for (const imei of imeis) await assertImei(ctx, args.category, imei);
 
-    const { imeis: _ignored, paymentMethod, purchaseDate, purchaseNotes, ...fields } = args;
+    const {
+      imeis: _ignored,
+      paymentMethod,
+      purchaseDate,
+      purchaseNotes,
+      purchaseFxRate,
+      ...fields
+    } = args;
     void _ignored;
     const ids: Id<"products">[] = [];
     for (const imei of imeis) {
@@ -339,7 +352,7 @@ export const createBatch = mutation({
           userId,
           fields,
           { quantity: 1, imei },
-          { paymentMethod, purchaseDate, purchaseNotes },
+          { paymentMethod, purchaseDate, purchaseNotes, purchaseFxRate },
         ),
       );
     }

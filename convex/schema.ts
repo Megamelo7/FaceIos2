@@ -106,6 +106,11 @@ export default defineSchema({
     date: v.number(),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
+    // Cargado en pesos: moneda original, cotización (ARS por US$) y monto en ARS.
+    // `amount` y los precios quedan siempre en la moneda de la tienda.
+    fxCurrency: v.optional(v.string()),
+    fxRate: v.optional(v.number()),
+    fxAmount: v.optional(v.number()),
   })
     .index("by_type", ["type"])
     .index("by_date", ["date"])

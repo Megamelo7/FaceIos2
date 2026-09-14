@@ -12,6 +12,16 @@ async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   return userId;
 }
 
+/**
+ * Cargado en pesos: el front ya convirtió los importes a dólares; acá se
+ * guarda la cotización y el monto original en ARS (`amount` × cotización).
+ */
+export function fxFields(amount: number, fxRate: number | undefined) {
+  if (fxRate === undefined) return {};
+  if (!(fxRate > 0)) throw new ConvexError("La cotización debe ser mayor a 0.");
+  return { fxCurrency: "ARS", fxRate, fxAmount: Math.round(amount * fxRate * 100) / 100 };
+}
+
 /** Recalcula el estado del producto según su cantidad (sin pisar "reservado"/"oculto"). */
 function statusFromQuantity(
   quantity: number,
@@ -68,6 +78,7 @@ export const recordSale = mutation({
     customerContact: v.optional(v.string()),
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
+    fxRate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -150,6 +161,7 @@ export const recordSale = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
+      ...fxFields(amount, args.fxRate),
     });
   },
 });
@@ -165,6 +177,7 @@ export const recordPurchase = mutation({
     paymentMethod: v.optional(v.string()),
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
+    fxRate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -205,6 +218,7 @@ export const recordPurchase = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
+      ...fxFields(args.unitCost * args.quantity, args.fxRate),
     });
   },
 });
@@ -218,6 +232,7 @@ export const recordManual = mutation({
     paymentMethod: v.optional(v.string()),
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
+    fxRate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -232,6 +247,7 @@ export const recordManual = mutation({
       date: args.date ?? Date.now(),
       createdBy: userId,
       createdAt: Date.now(),
+      ...fxFields(args.amount, args.fxRate),
     });
   },
 });

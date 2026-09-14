@@ -5,8 +5,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
 import CustomerPicker, { CustomerSelection } from "./CustomerPicker";
 import { TX_META, TxType, PAYMENT_METHODS } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue } from "../lib/format";
+import { toDateInputValue, fromDateInputValue, formatCurrency } from "../lib/format";
 import { useCurrency } from "../lib/useCurrency";
+import FxFields, { useFx, InputCurrency } from "./FxFields";
 import { Loader2 } from "lucide-react";
 
 type Props = {
@@ -31,6 +32,7 @@ export default function TransactionModal({
   const recordPurchase = useMutation(api.transactions.recordPurchase);
   const recordManual = useMutation(api.transactions.recordManual);
   const { money } = useCurrency();
+  const fx = useFx();
 
   const [productId, setProductId] = useState("");
   const [concept, setConcept] = useState("");
@@ -71,7 +73,12 @@ export default function TransactionModal({
     }
     setProductId(id);
     const p = products?.find((x) => x._id === id);
-    if (p) setUnitValue(isSale ? p.salePrice.toString() : p.costPrice.toString());
+    if (p) setUnitValue(fx.convertFromStore(isSale ? p.salePrice : p.costPrice));
+  }
+
+  function onFxCurrencyChange(to: InputCurrency) {
+    setUnitValue((v) => fx.convertInput(v, to));
+    setAmount((v) => fx.convertInput(v, to));
   }
 
   // Preseleccionar el producto cuando la lista termina de cargar.
@@ -86,13 +93,17 @@ export default function TransactionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialProductId, products]);
 
-  const total = isProductTx
+  // Importes en la moneda cargada; `total` siempre en la moneda de la tienda.
+  const totalInput = isProductTx
     ? (Number(quantity) || 0) * (Number(unitValue) || 0)
     : Number(amount) || 0;
+  const unitStore = fx.toStore(Number(unitValue) || 0);
+  const total = isProductTx ? (Number(quantity) || 0) * unitStore : fx.toStore(totalInput);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (fx.error) return setError(fx.error);
     setSaving(true);
     try {
       const when = fromDateInputValue(date);
@@ -104,7 +115,8 @@ export default function TransactionModal({
         await recordSale({
           productId: selectedProduct!._id,
           quantity: Number(quantity),
-          unitPrice: Number(unitValue),
+          unitPrice: unitStore,
+          fxRate: fx.fxRate,
           paymentMethod: payment,
           customerId: customer?.kind === "existing" ? customer.id : undefined,
           newCustomer:
@@ -123,7 +135,8 @@ export default function TransactionModal({
         await recordPurchase({
           productId: selectedProduct!._id,
           quantity: Number(quantity),
-          unitCost: Number(unitValue),
+          unitCost: unitStore,
+          fxRate: fx.fxRate,
           updateCost,
           paymentMethod: payment,
           notes: notes.trim() || undefined,
@@ -133,7 +146,8 @@ export default function TransactionModal({
         if (!concept.trim()) throw new Error("Ingresá un concepto.");
         await recordManual({
           type: type as "gasto" | "ingreso",
-          amount: Number(amount),
+          amount: fx.toStore(Number(amount)),
+          fxRate: fx.fxRate,
           concept: concept.trim(),
           paymentMethod: payment,
           notes: notes.trim() || undefined,
@@ -176,6 +190,8 @@ export default function TransactionModal({
           <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
         )}
 
+        <FxFields fx={fx} onCurrencyChange={onFxCurrencyChange} />
+
         {isProductTx ? (
           <>
             <Field
@@ -215,7 +231,9 @@ export default function TransactionModal({
                   onChange={(e) => setQuantity(e.target.value)}
                 />
               </Field>
-              <Field label={isSale ? "Precio unitario" : "Costo unitario"}>
+              <Field
+                label={`${isSale ? "Precio unitario" : "Costo unitario"}${fx.inArs ? " (ARS)" : ""}`}
+              >
                 <input
                   className="input"
                   type="number"
@@ -248,7 +266,7 @@ export default function TransactionModal({
                 placeholder={type === "gasto" ? "Alquiler, servicios, envío…" : "Reparación, seña…"}
               />
             </Field>
-            <Field label="Monto">
+            <Field label={fx.inArs ? "Monto (ARS)" : "Monto"}>
               <input
                 className="input"
                 type="number"
@@ -302,13 +320,20 @@ export default function TransactionModal({
         {/* Resumen */}
         <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${meta.color}`}>
           <span className="text-sm font-medium">Total {meta.label.toLowerCase()}</span>
-          <span className="text-lg font-bold">{money(total)}</span>
+          <span className="text-right">
+            <span className="block text-lg font-bold">{money(total)}</span>
+            {fx.inArs && (
+              <span className="block text-xs font-medium opacity-80">
+                {formatCurrency(totalInput, "ARS")}
+              </span>
+            )}
+          </span>
         </div>
         {isSale && selectedProduct && (
           <p className="text-xs text-ink-500">
             Ganancia estimada:{" "}
             <strong className="text-emerald-600">
-              {money((Number(unitValue) - selectedProduct.costPrice) * (Number(quantity) || 0))}
+              {money((unitStore - selectedProduct.costPrice) * (Number(quantity) || 0))}
             </strong>
           </p>
         )}
