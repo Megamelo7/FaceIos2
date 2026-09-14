@@ -1,26 +1,34 @@
 import { useState, FormEvent } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Field, Modal, Badge, EmptyState } from "../../components/ui";
-import PasswordInput from "../../components/PasswordInput";
 import { formatDate } from "../../lib/format";
-import { UserPlus, Users as UsersIcon, Trash2, Loader2, ShieldCheck } from "lucide-react";
+import {
+  UserPlus,
+  Users as UsersIcon,
+  Trash2,
+  Loader2,
+  ShieldCheck,
+  KeyRound,
+} from "lucide-react";
+
+type Confirm = { kind: "delete" | "reset"; id: Id<"users">; label: string };
 
 export default function Users() {
   const users = useQuery(api.users.list);
-  const createUser = useAction(api.users.create);
+  const inviteUser = useMutation(api.users.invite);
   const removeUser = useMutation(api.users.remove);
+  const resetPassword = useMutation(api.users.resetPassword);
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<{ id: Id<"users">; label: string } | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [working, setWorking] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,42 +36,55 @@ export default function Users() {
     setSuccess(null);
     setSaving(true);
     try {
-      await createUser({ email, name, password });
-      setSuccess(`Usuario ${email.trim().toLowerCase()} creado correctamente.`);
+      await inviteUser({ email, name });
+      setSuccess(
+        `Listo: ${email.trim().toLowerCase()} crea su contraseña la primera vez que ingresa.`,
+      );
       setEmail("");
       setName("");
-      setPassword("");
     } catch (err) {
-      setError(err instanceof ConvexError ? String(err.data) : "No se pudo crear el usuario.");
+      setError(err instanceof ConvexError ? String(err.data) : "No se pudo invitar al usuario.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function confirmDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
+  async function onConfirm() {
+    if (!confirm) return;
+    setWorking(true);
     setError(null);
+    setSuccess(null);
     try {
-      await removeUser({ userId: toDelete.id });
+      if (confirm.kind === "delete") {
+        await removeUser({ userId: confirm.id });
+      } else {
+        await resetPassword({ userId: confirm.id });
+        setSuccess(`Clave de ${confirm.label} blanqueada.`);
+      }
     } catch (err) {
-      setError(err instanceof ConvexError ? String(err.data) : "No se pudo eliminar el usuario.");
+      setError(
+        err instanceof ConvexError
+          ? String(err.data)
+          : confirm.kind === "delete"
+            ? "No se pudo eliminar el usuario."
+            : "No se pudo blanquear la clave.",
+      );
     } finally {
-      setDeleting(false);
-      setToDelete(null);
+      setWorking(false);
+      setConfirm(null);
     }
   }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-      {/* Alta de usuario */}
+      {/* Invitación */}
       <form onSubmit={onSubmit} className="card p-6 lg:col-span-2">
         <div className="mb-5 flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <UserPlus className="h-5 w-5" />
           </span>
           <div>
-            <h3 className="font-semibold text-ink-900">Nuevo usuario</h3>
+            <h3 className="font-semibold text-ink-900">Invitar usuario</h3>
             <p className="text-xs text-ink-500">Tendrá acceso completo al panel.</p>
           </div>
         </div>
@@ -89,16 +110,6 @@ export default function Users() {
               autoComplete="off"
             />
           </Field>
-          <Field label="Contraseña" hint="Mínimo 8 caracteres. Usá el ojito para verla.">
-            <PasswordInput
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              minLength={8}
-              required
-              autoComplete="new-password"
-            />
-          </Field>
 
           {error && (
             <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
@@ -115,7 +126,7 @@ export default function Users() {
             ) : (
               <UserPlus className="h-4 w-4" />
             )}
-            Crear usuario
+            Invitar usuario
           </button>
         </div>
       </form>
@@ -142,32 +153,54 @@ export default function Users() {
           </div>
         ) : (
           <div className="divide-y divide-ink-100">
-            {users.map((u) => (
-              <div key={u._id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-100 text-sm font-bold text-ink-600">
-                    {(u.name || u.email || "?").charAt(0).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 truncate text-sm font-medium text-ink-900">
-                      {u.name || "—"}
-                      {u.isMe && <Badge className="bg-brand-50 text-brand-700">Vos</Badge>}
-                    </p>
-                    <p className="truncate text-xs text-ink-400">
-                      {u.email} · desde {formatDate(u.createdAt)}
-                    </p>
+            {users.map((u) => {
+              const label = u.name || u.email;
+              return (
+                <div key={u._id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-100 text-sm font-bold text-ink-600">
+                      {(u.name || u.email || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 truncate text-sm font-medium text-ink-900">
+                        {u.name || "—"}
+                        {u.isMe && <Badge className="bg-brand-50 text-brand-700">Vos</Badge>}
+                        {u.pending && (
+                          <Badge className="bg-amber-50 text-amber-700">Sin contraseña</Badge>
+                        )}
+                      </p>
+                      <p className="truncate text-xs text-ink-400">
+                        {u.email} · desde {formatDate(u.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      className="rounded-lg p-2 text-ink-400 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                      onClick={() => setConfirm({ kind: "reset", id: u._id, label })}
+                      disabled={u.isMe || u.pending}
+                      title={
+                        u.isMe
+                          ? "No podés blanquear tu propia clave"
+                          : u.pending
+                            ? "Todavía no creó su contraseña"
+                            : "Blanquear clave"
+                      }
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </button>
+                    <button
+                      className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                      onClick={() => setConfirm({ kind: "delete", id: u._id, label })}
+                      disabled={u.isMe}
+                      title={u.isMe ? "No podés eliminar tu propio usuario" : "Eliminar acceso"}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-                <button
-                  className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                  onClick={() => setToDelete({ id: u._id, label: u.name || u.email })}
-                  disabled={u.isMe}
-                  title={u.isMe ? "No podés eliminar tu propio usuario" : "Eliminar acceso"}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -178,27 +211,38 @@ export default function Users() {
       </div>
 
       <Modal
-        open={!!toDelete}
-        onClose={() => setToDelete(null)}
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
         size="sm"
-        title="Eliminar usuario"
+        title={confirm?.kind === "reset" ? "Blanquear clave" : "Eliminar usuario"}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setToDelete(null)}>
+            <button className="btn-secondary" onClick={() => setConfirm(null)}>
               Cancelar
             </button>
-            <button className="btn-danger" onClick={confirmDelete} disabled={deleting}>
-              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Eliminar
+            <button
+              className={confirm?.kind === "reset" ? "btn-primary" : "btn-danger"}
+              onClick={onConfirm}
+              disabled={working}
+            >
+              {working && <Loader2 className="h-4 w-4 animate-spin" />}
+              {confirm?.kind === "reset" ? "Blanquear" : "Eliminar"}
             </button>
           </>
         }
       >
-        <p className="text-sm text-ink-600">
-          ¿Eliminar el acceso de{" "}
-          <strong className="text-ink-900">{toDelete?.label}</strong>? Se cerrarán sus sesiones
-          y no podrá volver a ingresar.
-        </p>
+        {confirm?.kind === "reset" ? (
+          <p className="text-sm text-ink-600">
+            ¿Blanquear la clave de <strong className="text-ink-900">{confirm.label}</strong>? Se
+            cerrarán sus sesiones y la próxima vez que ingrese con su mail va a crear una
+            contraseña nueva.
+          </p>
+        ) : (
+          <p className="text-sm text-ink-600">
+            ¿Eliminar el acceso de <strong className="text-ink-900">{confirm?.label}</strong>? Se
+            cerrarán sus sesiones y no podrá volver a ingresar.
+          </p>
+        )}
       </Modal>
     </div>
   );

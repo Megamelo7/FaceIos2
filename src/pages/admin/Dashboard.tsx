@@ -18,7 +18,7 @@ import {
 
 export default function Dashboard() {
   const data = useQuery(api.dashboard.overview);
-  const me = useQuery(api.users.list)?.find((u) => u.isMe);
+  const me = useQuery(api.users.me);
   const userName = me?.name || me?.email.split("@")[0] || "";
   const { money } = useCurrency();
 

@@ -14,6 +14,24 @@ import { authTables } from "@convex-dev/auth/server";
 export default defineSchema({
   ...authTables,
 
+  /** Usuarios: campos de Convex Auth + invitación y superusuario. */
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    // Invitado o con clave blanqueada: crea su contraseña al ingresar con su mail.
+    mustSetPassword: v.optional(v.boolean()),
+    // Acceso total; no aparece en Usuarios y no se puede borrar ni blanquear.
+    // Se asigna sólo por CLI: `npx convex run users:setSuperuser '{"email":"..."}'`.
+    isSuperuser: v.optional(v.boolean()),
+  })
+    .index("email", ["email"])
+    .index("phone", ["phone"]),
+
   products: defineTable({
     name: v.string(),
     category: v.union(
