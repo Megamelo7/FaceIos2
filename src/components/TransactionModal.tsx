@@ -195,7 +195,7 @@ export default function TransactionModal({
               >
                 <option value="">— Elegí un producto —</option>
                 {isPurchase && onCreateNewProduct && (
-                  <option value="__new__">＋ Producto nuevo (cargar con combos)…</option>
+                  <option value="__new__">＋ Producto nuevo</option>
                 )}
                 {selectable?.map((p) => (
                   <option key={p._id} value={p._id}>
