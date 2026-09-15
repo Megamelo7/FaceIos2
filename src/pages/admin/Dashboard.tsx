@@ -209,15 +209,15 @@ export default function Dashboard() {
       {/* Marca de agua: el logo muy tenue encima del contenido (no bloquea clics).
           El logo tiene fondo blanco: en claro se funde con multiply; en oscuro se
           invierte y se funde con screen. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-10 !mt-0 flex items-center justify-center overflow-hidden"
-      >
-        <img
-          src={settings?.logoUrl || "/logo.png"}
-          alt=""
-          className="w-[min(85%,44rem)] opacity-[0.06] mix-blend-multiply dark:opacity-[0.08] dark:invert dark:mix-blend-screen"
-        />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 !mt-0">
+        {/* Sticky: queda centrado en la parte visible (debajo de la barra de 4rem) al hacer scroll. */}
+        <div className="sticky top-16 flex h-[calc(100vh-4rem)] items-center justify-center overflow-hidden">
+          <img
+            src={settings?.logoUrl || "/logo.png"}
+            alt=""
+            className="w-[min(80%,42rem)] -translate-y-8 opacity-[0.1] mix-blend-multiply dark:opacity-[0.12] dark:invert dark:mix-blend-screen"
+          />
+        </div>
       </div>
     </div>
   );
