@@ -28,13 +28,13 @@ function ProtectedRoute() {
   return <Outlet />;
 }
 
-/** La tienda pública es siempre oscura (estilo MAT); el panel y el login siguen la elección del usuario. */
+/** El modo oscuro aplica sólo al panel y al login; la tienda pública es clara. */
 function useThemeScope() {
   const { pathname } = useLocation();
   const { isDark } = useTheme();
   useEffect(() => {
     const panel = pathname.startsWith("/admin") || pathname.startsWith("/login");
-    document.documentElement.classList.toggle("dark", !panel || isDark);
+    document.documentElement.classList.toggle("dark", panel && isDark);
   }, [pathname, isDark]);
 }
 
