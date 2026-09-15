@@ -1,9 +1,10 @@
 import { useState, FormEvent } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Field, Modal, Badge, EmptyState } from "../../components/ui";
+import PasswordInput from "../../components/PasswordInput";
 import { formatDate } from "../../lib/format";
 import {
   UserPlus,
@@ -14,21 +15,28 @@ import {
   KeyRound,
 } from "lucide-react";
 
-type Confirm = { kind: "delete" | "reset"; id: Id<"users">; label: string };
+type Target = { id: Id<"users">; label: string };
 
 export default function Users() {
   const users = useQuery(api.users.list);
-  const inviteUser = useMutation(api.users.invite);
+  const createUser = useAction(api.users.create);
   const removeUser = useMutation(api.users.remove);
-  const resetPassword = useMutation(api.users.resetPassword);
+  const setPassword = useAction(api.users.setPassword);
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [password, setPasswordValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
-  const [working, setWorking] = useState(false);
+
+  const [toDelete, setToDelete] = useState<Target | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [pwTarget, setPwTarget] = useState<Target | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -36,55 +44,68 @@ export default function Users() {
     setSuccess(null);
     setSaving(true);
     try {
-      await inviteUser({ email, name });
-      setSuccess(
-        `Listo: ${email.trim().toLowerCase()} crea su contraseña la primera vez que ingresa.`,
-      );
+      await createUser({ email, name, password });
+      setSuccess(`Usuario ${email.trim().toLowerCase()} creado correctamente.`);
       setEmail("");
       setName("");
+      setPasswordValue("");
     } catch (err) {
-      setError(err instanceof ConvexError ? String(err.data) : "No se pudo invitar al usuario.");
+      setError(err instanceof ConvexError ? String(err.data) : "No se pudo crear el usuario.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function onConfirm() {
-    if (!confirm) return;
-    setWorking(true);
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     setError(null);
     setSuccess(null);
     try {
-      if (confirm.kind === "delete") {
-        await removeUser({ userId: confirm.id });
-      } else {
-        await resetPassword({ userId: confirm.id });
-        setSuccess(`Clave de ${confirm.label} blanqueada.`);
-      }
+      await removeUser({ userId: toDelete.id });
     } catch (err) {
-      setError(
-        err instanceof ConvexError
-          ? String(err.data)
-          : confirm.kind === "delete"
-            ? "No se pudo eliminar el usuario."
-            : "No se pudo blanquear la clave.",
+      setError(err instanceof ConvexError ? String(err.data) : "No se pudo eliminar el usuario.");
+    } finally {
+      setDeleting(false);
+      setToDelete(null);
+    }
+  }
+
+  function openPassword(target: Target) {
+    setPwTarget(target);
+    setNewPassword("");
+    setPwError(null);
+  }
+
+  async function savePassword(e?: FormEvent) {
+    e?.preventDefault();
+    if (!pwTarget) return;
+    setPwError(null);
+    setPwSaving(true);
+    try {
+      await setPassword({ userId: pwTarget.id, password: newPassword });
+      setSuccess(`Contraseña de ${pwTarget.label} cambiada. Pasale la nueva.`);
+      setError(null);
+      setPwTarget(null);
+    } catch (err) {
+      setPwError(
+        err instanceof ConvexError ? String(err.data) : "No se pudo cambiar la contraseña.",
       );
     } finally {
-      setWorking(false);
-      setConfirm(null);
+      setPwSaving(false);
     }
   }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-      {/* Invitación */}
+      {/* Alta de usuario */}
       <form onSubmit={onSubmit} className="card p-6 lg:col-span-2">
         <div className="mb-5 flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <UserPlus className="h-5 w-5" />
           </span>
           <div>
-            <h3 className="font-semibold text-ink-900">Invitar usuario</h3>
+            <h3 className="font-semibold text-ink-900">Nuevo usuario</h3>
             <p className="text-xs text-ink-500">Tendrá acceso completo al panel.</p>
           </div>
         </div>
@@ -110,6 +131,16 @@ export default function Users() {
               autoComplete="off"
             />
           </Field>
+          <Field label="Contraseña" hint="Mínimo 8 caracteres. Usá el ojito para verla.">
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPasswordValue(e.target.value)}
+              placeholder="••••••••"
+              minLength={8}
+              required
+              autoComplete="new-password"
+            />
+          </Field>
 
           {error && (
             <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
@@ -126,7 +157,7 @@ export default function Users() {
             ) : (
               <UserPlus className="h-4 w-4" />
             )}
-            Invitar usuario
+            Crear usuario
           </button>
         </div>
       </form>
@@ -177,21 +208,15 @@ export default function Users() {
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       className="rounded-lg p-2 text-ink-400 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                      onClick={() => setConfirm({ kind: "reset", id: u._id, label })}
-                      disabled={u.isMe || u.pending}
-                      title={
-                        u.isMe
-                          ? "No podés blanquear tu propia clave"
-                          : u.pending
-                            ? "Todavía no creó su contraseña"
-                            : "Blanquear clave"
-                      }
+                      onClick={() => openPassword({ id: u._id, label })}
+                      disabled={u.isMe}
+                      title={u.isMe ? "No podés cambiar tu propia contraseña desde acá" : "Cambiar contraseña"}
                     >
                       <KeyRound className="h-4 w-4" />
                     </button>
                     <button
                       className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                      onClick={() => setConfirm({ kind: "delete", id: u._id, label })}
+                      onClick={() => setToDelete({ id: u._id, label })}
                       disabled={u.isMe}
                       title={u.isMe ? "No podés eliminar tu propio usuario" : "Eliminar acceso"}
                     >
@@ -210,39 +235,68 @@ export default function Users() {
         </div>
       </div>
 
+      {/* Cambiar contraseña */}
       <Modal
-        open={!!confirm}
-        onClose={() => setConfirm(null)}
+        open={!!pwTarget}
+        onClose={() => setPwTarget(null)}
         size="sm"
-        title={confirm?.kind === "reset" ? "Blanquear clave" : "Eliminar usuario"}
+        title="Cambiar contraseña"
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setConfirm(null)}>
+            <button className="btn-secondary" onClick={() => setPwTarget(null)}>
               Cancelar
             </button>
-            <button
-              className={confirm?.kind === "reset" ? "btn-primary" : "btn-danger"}
-              onClick={onConfirm}
-              disabled={working}
-            >
-              {working && <Loader2 className="h-4 w-4 animate-spin" />}
-              {confirm?.kind === "reset" ? "Blanquear" : "Eliminar"}
+            <button className="btn-primary" onClick={() => void savePassword()} disabled={pwSaving}>
+              {pwSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Guardar
             </button>
           </>
         }
       >
-        {confirm?.kind === "reset" ? (
+        <form onSubmit={savePassword} className="space-y-4">
           <p className="text-sm text-ink-600">
-            ¿Blanquear la clave de <strong className="text-ink-900">{confirm.label}</strong>? Se
-            cerrarán sus sesiones y la próxima vez que ingrese con su mail va a crear una
-            contraseña nueva.
+            Nueva contraseña para <strong className="text-ink-900">{pwTarget?.label}</strong>. La
+            anterior deja de funcionar y se cierran sus sesiones.
           </p>
-        ) : (
-          <p className="text-sm text-ink-600">
-            ¿Eliminar el acceso de <strong className="text-ink-900">{confirm?.label}</strong>? Se
-            cerrarán sus sesiones y no podrá volver a ingresar.
-          </p>
-        )}
+          <Field label="Nueva contraseña" hint="Mínimo 8 caracteres.">
+            <PasswordInput
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="••••••••"
+              minLength={8}
+              required
+              autoComplete="new-password"
+              autoFocus
+            />
+          </Field>
+          {pwError && (
+            <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{pwError}</div>
+          )}
+        </form>
+      </Modal>
+
+      {/* Eliminar */}
+      <Modal
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        size="sm"
+        title="Eliminar usuario"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setToDelete(null)}>
+              Cancelar
+            </button>
+            <button className="btn-danger" onClick={confirmDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Eliminar
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-600">
+          ¿Eliminar el acceso de <strong className="text-ink-900">{toDelete?.label}</strong>? Se
+          cerrarán sus sesiones y no podrá volver a ingresar.
+        </p>
       </Modal>
     </div>
   );

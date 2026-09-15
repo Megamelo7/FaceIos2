@@ -14,40 +14,23 @@ export default function Login() {
   // true sólo cuando el sistema no tiene ningún usuario (primer arranque).
   const needsBootstrap = useQuery(api.users.needsBootstrap) === true;
   const bootstrap = useAction(api.users.bootstrap);
-  const setInitialPassword = useAction(api.users.setInitialPassword);
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // Invitado o con clave blanqueada: en vez de ingresar, crea su contraseña.
-  const needsSetup =
-    useQuery(
-      api.users.needsPasswordSetup,
-      !needsBootstrap && email.includes("@") ? { email } : "skip",
-    ) === true;
-  const mode = needsBootstrap ? "bootstrap" : needsSetup ? "setup" : "login";
-  const creatingPassword = mode !== "login";
 
   if (!isLoading && isAuthenticated) return <Navigate to="/admin" replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (mode === "setup" && password !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
-      return;
-    }
     setSubmitting(true);
     try {
-      if (mode === "bootstrap") {
+      if (needsBootstrap) {
         // Primer admin: se crea la cuenta y luego se inicia sesión con ella.
         await bootstrap({ email, name, password });
-      } else if (mode === "setup") {
-        await setInitialPassword({ email, password });
       }
       await signIn("password", { email, password, flow: "signIn" });
       // Al autenticarse, el router redirige a /admin automáticamente.
@@ -55,11 +38,9 @@ export default function Login() {
       setError(
         err instanceof ConvexError
           ? String(err.data)
-          : mode === "bootstrap"
+          : needsBootstrap
             ? "No se pudo crear la cuenta."
-            : mode === "setup"
-              ? "No se pudo crear la contraseña."
-              : "Email o contraseña incorrectos.",
+            : "Email o contraseña incorrectos.",
       );
       setSubmitting(false);
     }
@@ -98,7 +79,7 @@ export default function Login() {
             <img src="/logo.png" alt="FaceIos2" className="h-14 w-auto" />
           </div>
 
-          {mode === "bootstrap" ? (
+          {needsBootstrap ? (
             <>
               <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" /> Configuración inicial
@@ -109,11 +90,6 @@ export default function Login() {
                 las demás se agregan desde el panel.
               </p>
             </>
-          ) : mode === "setup" ? (
-            <>
-              <h2 className="text-2xl font-bold text-ink-900">Creá tu contraseña</h2>
-              <p className="mt-1 text-sm text-ink-500">Es tu primer ingreso con este mail.</p>
-            </>
           ) : (
             <>
               <h2 className="text-2xl font-bold text-ink-900">Iniciar sesión</h2>
@@ -122,7 +98,7 @@ export default function Login() {
           )}
 
           <form onSubmit={onSubmit} className="mt-7 space-y-4">
-            {mode === "bootstrap" && (
+            {needsBootstrap && (
               <Field label="Nombre">
                 <input
                   className="input"
@@ -145,28 +121,16 @@ export default function Login() {
                 autoComplete="email"
               />
             </Field>
-            <Field label="Contraseña" hint={creatingPassword ? "Mínimo 8 caracteres." : undefined}>
+            <Field label="Contraseña" hint={needsBootstrap ? "Mínimo 8 caracteres." : undefined}>
               <PasswordInput
                 required
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                autoComplete={creatingPassword ? "new-password" : "current-password"}
+                autoComplete={needsBootstrap ? "new-password" : "current-password"}
               />
             </Field>
-            {mode === "setup" && (
-              <Field label="Repetir contraseña">
-                <PasswordInput
-                  required
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                />
-              </Field>
-            )}
 
             {error && (
               <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
@@ -177,20 +141,16 @@ export default function Login() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  {mode === "bootstrap"
-                    ? "Crear cuenta y entrar"
-                    : mode === "setup"
-                      ? "Crear contraseña y entrar"
-                      : "Ingresar"}
+                  {needsBootstrap ? "Crear cuenta y entrar" : "Ingresar"}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {mode === "login" && (
+          {!needsBootstrap && (
             <p className="mt-6 text-center text-xs text-ink-400">
-              ¿No tenés cuenta? Pedile al administrador que te invite desde el panel.
+              ¿No tenés cuenta? Pedile al administrador que te cree un usuario desde el panel.
             </p>
           )}
 

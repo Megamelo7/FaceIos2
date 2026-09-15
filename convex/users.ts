@@ -40,6 +40,12 @@ async function deleteSessions(ctx: MutationCtx, userId: Id<"users">) {
   }
 }
 
+function validatePassword(password: string) {
+  if (password.length < 8) {
+    throw new ConvexError("La contraseña debe tener al menos 8 caracteres.");
+  }
+}
+
 /** Busca un usuario por email (uso interno). */
 export const findByEmail = internalQuery({
   args: { email: v.string() },
@@ -68,22 +74,20 @@ export const needsBootstrap = query({
 
 /**
  * Crea el PRIMER admin cuando no existe ningún usuario. Se deshabilita solo
- * en cuanto hay un usuario (después, las cuentas se invitan desde Usuarios).
+ * en cuanto hay un usuario (después, las cuentas se crean desde Usuarios).
  */
 export const bootstrap = action({
   args: { email: v.string(), name: v.string(), password: v.string() },
   handler: async (ctx, args): Promise<null> => {
     const empty = await ctx.runQuery(internal.users.isEmpty, {});
     if (!empty) {
-      throw new ConvexError("Ya existe un administrador. Pedile que te invite.");
+      throw new ConvexError("Ya existe un administrador. Pedile que cree tu usuario.");
     }
     const email = normalizeEmail(args.email);
     const name = args.name.trim();
     if (!email || !email.includes("@")) throw new ConvexError("Ingresá un email válido.");
     if (!name) throw new ConvexError("El nombre es obligatorio.");
-    if (args.password.length < 8) {
-      throw new ConvexError("La contraseña debe tener al menos 8 caracteres.");
-    }
+    validatePassword(args.password);
     await createAccount(ctx, {
       provider: "password",
       account: { id: email, secret: args.password },
@@ -120,6 +124,7 @@ export const list = query({
         email: u.email ?? "",
         createdAt: u._creationTime,
         isMe: u._id === me,
+        // Legado: usuarios invitados que nunca crearon su contraseña.
         pending: u.mustSetPassword === true,
       }))
       .sort((a, b) => a.createdAt - b.createdAt);
@@ -127,12 +132,13 @@ export const list = query({
 });
 
 /**
- * Invita a un usuario: queda creado sin contraseña y la elige la primera vez
- * que ingresa con su mail (ver `setInitialPassword`).
+ * Crea un usuario nuevo con email + nombre + contraseña, desde Usuarios.
+ * Sólo puede hacerlo un usuario logueado y NO afecta su sesión actual
+ * (a diferencia del flow "signUp", que loguearía al usuario nuevo).
  */
-export const invite = mutation({
-  args: { email: v.string(), name: v.string() },
-  handler: async (ctx, args) => {
+export const create = action({
+  args: { email: v.string(), name: v.string(), password: v.string() },
+  handler: async (ctx, args): Promise<null> => {
     const me = await getAuthUserId(ctx);
     if (me === null) throw new ConvexError("No autorizado.");
 
@@ -140,72 +146,48 @@ export const invite = mutation({
     const name = args.name.trim();
     if (!email || !email.includes("@")) throw new ConvexError("Ingresá un email válido.");
     if (!name) throw new ConvexError("El nombre es obligatorio.");
+    validatePassword(args.password);
 
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", email))
-      .first();
+    const existing = await ctx.runQuery(internal.users.findByEmail, { email });
     if (existing) throw new ConvexError("Ya existe un usuario con ese email.");
 
-    // `emailVerificationTime` permite que `createAccount` vincule la
-    // contraseña a este usuario (por email) en vez de crear otro.
-    await ctx.db.insert("users", {
-      email,
-      name,
-      emailVerificationTime: Date.now(),
-      mustSetPassword: true,
-    });
-  },
-});
-
-/** Público (login): ¿este email tiene que crear su contraseña? */
-export const needsPasswordSetup = query({
-  args: { email: v.string() },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", normalizeEmail(args.email)))
-      .first();
-    return user?.mustSetPassword === true;
-  },
-});
-
-/** Primer ingreso de un invitado (o tras blanquear): crea su contraseña. */
-export const setInitialPassword = action({
-  args: { email: v.string(), password: v.string() },
-  handler: async (ctx, args): Promise<null> => {
-    const email = normalizeEmail(args.email);
-    if (args.password.length < 8) {
-      throw new ConvexError("La contraseña debe tener al menos 8 caracteres.");
-    }
-    const user = await ctx.runQuery(internal.users.findByEmail, { email });
-    if (!user || user.mustSetPassword !== true) {
-      throw new ConvexError("Este email no tiene que crear contraseña.");
-    }
-
-    const created = await createAccount(ctx, {
+    await createAccount(ctx, {
       provider: "password",
       account: { id: email, secret: args.password },
-      profile: { email, name: user.name ?? "" },
-      shouldLinkViaEmail: true,
+      profile: { email, name },
     });
-    const linked: boolean = await ctx.runMutation(internal.users.finishPasswordSetup, {
-      userId: user._id,
-      createdUserId: created.user._id,
-    });
-    if (!linked) {
-      throw new ConvexError(
-        "No se pudo crear la contraseña. Pedile al administrador que te invite de nuevo.",
-      );
-    }
     return null;
   },
 });
 
 /**
- * Marca la contraseña como creada. Si `createAccount` no la vinculó al
- * invitado, borra el alta duplicada y devuelve false: no lanza acá, porque un
- * error revertiría el borrado (el error lo lanza la action).
+ * Paso 1 de `setPassword` (uso interno): valida el destino, borra la contraseña
+ * anterior y cierra sus sesiones.
+ */
+export const prepareSetPassword = internalMutation({
+  args: { me: v.id("users"), userId: v.id("users") },
+  handler: async (ctx, args): Promise<{ email: string; name: string }> => {
+    if (args.me === args.userId) {
+      throw new ConvexError("No podés cambiar tu propia contraseña desde acá.");
+    }
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.isSuperuser === true || !user.email) {
+      throw new ConvexError("Usuario no encontrado.");
+    }
+    await deleteAccounts(ctx, args.userId);
+    await deleteSessions(ctx, args.userId);
+    // Permite que `createAccount` vincule la nueva contraseña a este usuario (por email).
+    if (user.emailVerificationTime === undefined) {
+      await ctx.db.patch(args.userId, { emailVerificationTime: Date.now() });
+    }
+    return { email: user.email, name: user.name ?? "" };
+  },
+});
+
+/**
+ * Paso 2 de `setPassword` (uso interno). Si `createAccount` no vinculó la
+ * contraseña al usuario, borra el alta duplicada y devuelve false: no lanza
+ * acá, porque un error revertiría el borrado (el error lo lanza la action).
  */
 export const finishPasswordSetup = internalMutation({
   args: { userId: v.id("users"), createdUserId: v.id("users") },
@@ -222,25 +204,32 @@ export const finishPasswordSetup = internalMutation({
 });
 
 /**
- * Blanquea la clave: borra la contraseña, cierra sus sesiones y la próxima vez
- * que ingrese con su mail crea una nueva.
+ * Cambia la contraseña de otro usuario: la anterior deja de valer y se cierran
+ * sus sesiones. No aplica al propio usuario ni al superusuario.
  */
-export const resetPassword = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+export const setPassword = action({
+  args: { userId: v.id("users"), password: v.string() },
+  handler: async (ctx, args): Promise<null> => {
     const me = await getAuthUserId(ctx);
     if (me === null) throw new ConvexError("No autorizado.");
-    if (me === args.userId) throw new ConvexError("No podés blanquear tu propia clave.");
+    validatePassword(args.password);
 
-    const user = await ctx.db.get(args.userId);
-    if (!user || user.isSuperuser === true) throw new ConvexError("Usuario no encontrado.");
-
-    await deleteAccounts(ctx, args.userId);
-    await deleteSessions(ctx, args.userId);
-    await ctx.db.patch(args.userId, {
-      mustSetPassword: true,
-      emailVerificationTime: user.emailVerificationTime ?? Date.now(),
+    const target: { email: string; name: string } = await ctx.runMutation(
+      internal.users.prepareSetPassword,
+      { me, userId: args.userId },
+    );
+    const created = await createAccount(ctx, {
+      provider: "password",
+      account: { id: target.email, secret: args.password },
+      profile: { email: target.email, name: target.name },
+      shouldLinkViaEmail: true,
     });
+    const linked: boolean = await ctx.runMutation(internal.users.finishPasswordSetup, {
+      userId: args.userId,
+      createdUserId: created.user._id,
+    });
+    if (!linked) throw new ConvexError("No se pudo cambiar la contraseña. Probá de nuevo.");
+    return null;
   },
 });
 

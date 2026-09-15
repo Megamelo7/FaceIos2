@@ -23,9 +23,10 @@ export default defineSchema({
     phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
-    // Invitado o con clave blanqueada: crea su contraseña al ingresar con su mail.
+    // Legado (invitaciones, ya quitadas): usuario sin contraseña. Se resuelve con
+    // "Cambiar contraseña" en Usuarios.
     mustSetPassword: v.optional(v.boolean()),
-    // Acceso total; no aparece en Usuarios y no se puede borrar ni blanquear.
+    // Acceso total; no aparece en Usuarios y no se le puede cambiar la clave ni borrar.
     // Se asigna sólo por CLI: `npx convex run users:setSuperuser '{"email":"..."}'`.
     isSuperuser: v.optional(v.boolean()),
   })
