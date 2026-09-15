@@ -123,7 +123,7 @@ export default function Landing() {
         >
           <div className="relative flex items-center justify-between gap-3">
             <a href="#top" className="shrink-0 px-1" aria-label={storeName}>
-              <img src={logo} alt={storeName} className="h-10 w-auto" />
+              <img src={logo} alt={storeName} className="h-10 w-auto mix-blend-multiply" />
             </a>
 
             <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] px-3 py-1.5 text-sm md:flex">
@@ -155,11 +155,12 @@ export default function Landing() {
       {/* Hero */}
       <section id="top" className="relative">
         <div className="mx-auto max-w-6xl px-4 pb-12 pt-28 text-center sm:px-6 sm:pt-32">
-          {/* El logo original es el hero. */}
+          {/* El logo original es el hero. Tiene fondo blanco opaco: `mix-blend-multiply`
+              lo funde con el fondo (glow y grilla) para que no parezca un recuadro. */}
           <img
             src={logo}
             alt={storeName}
-            className="mx-auto h-auto w-full max-w-md animate-fade-in sm:max-w-2xl"
+            className="mx-auto h-auto w-full max-w-md animate-fade-in mix-blend-multiply sm:max-w-2xl"
           />
 
           <div className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs text-black/70 backdrop-blur-xl sm:text-sm">
@@ -300,7 +301,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="relative border-t border-black/[0.08] px-4 py-10 pb-28 sm:px-6 sm:pb-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 text-center text-sm text-black/45 sm:flex-row sm:justify-between sm:text-left">
-          <img src={logo} alt={storeName} className="h-9 w-auto" />
+          <img src={logo} alt={storeName} className="h-9 w-auto mix-blend-multiply" />
           <p>© {new Date().getFullYear()} {storeName} · Todos los derechos reservados</p>
           <div className="flex items-center gap-4">
             <a

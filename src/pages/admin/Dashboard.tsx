@@ -20,12 +20,13 @@ export default function Dashboard() {
   const data = useQuery(api.dashboard.overview);
   const me = useQuery(api.users.me);
   const userName = me?.name || me?.email.split("@")[0] || "";
+  const settings = useQuery(api.settings.getAdmin);
   const { money } = useCurrency();
 
   if (data === undefined) return <FullPageLoader label="Cargando panel…" />;
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
       {userName && <h2 className="text-2xl font-bold text-ink-900">Hola, {userName}</h2>}
 
       {/* KPIs */}
@@ -203,6 +204,20 @@ export default function Dashboard() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Marca de agua: el logo muy tenue encima del contenido (no bloquea clics).
+          El logo tiene fondo blanco: en claro se funde con multiply; en oscuro se
+          invierte y se funde con screen. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-10 !mt-0 flex items-center justify-center overflow-hidden"
+      >
+        <img
+          src={settings?.logoUrl || "/logo.png"}
+          alt=""
+          className="w-[min(85%,44rem)] opacity-[0.06] mix-blend-multiply dark:opacity-[0.08] dark:invert dark:mix-blend-screen"
+        />
       </div>
     </div>
   );
