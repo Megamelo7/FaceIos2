@@ -1,4 +1,4 @@
-import { v, ConvexError } from "convex/values";
+import { v, ConvexError, Validator } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
@@ -196,6 +196,7 @@ async function insertProduct(
       type: "compra",
       productId: id,
       productName: fields.name,
+      productColor: fields.color,
       category: fields.category,
       quantity: unit.quantity,
       unitCost: fields.costPrice,
@@ -380,36 +381,41 @@ export const createBatch = mutation({
   },
 });
 
+/** Campo opcional que se puede borrar al editar: sin enviar = no cambia, `null` = se quita. */
+const clearable = <T extends Validator<any, "required", any>>(validator: T) =>
+  v.optional(v.union(validator, v.null()));
+
 export const update = mutation({
   args: {
     id: v.id("products"),
     name: v.optional(v.string()),
     category: v.optional(categoryValidator),
-    brand: v.optional(v.string()),
-    model: v.optional(v.string()),
-    storage: v.optional(v.string()),
-    color: v.optional(v.string()),
+    brand: clearable(v.string()),
+    model: clearable(v.string()),
+    storage: clearable(v.string()),
+    color: clearable(v.string()),
     condition: v.optional(conditionValidator),
-    batteryHealth: v.optional(v.number()),
-    batteryType: v.optional(batteryTypeValidator),
-    imei: v.optional(v.string()),
+    batteryHealth: clearable(v.number()),
+    batteryType: clearable(batteryTypeValidator),
+    imei: clearable(v.string()),
     costPrice: v.optional(v.number()),
     salePrice: v.optional(v.number()),
     // `quantity` NO se edita acá: el stock sólo cambia desde Movimientos.
-    minStock: v.optional(v.number()),
+    minStock: clearable(v.number()),
     status: v.optional(statusValidator),
     featured: v.optional(v.boolean()),
     images: imagesValidator,
-    description: v.optional(v.string()),
-    // Garantía Apple vigente (usados); `null` la quita.
-    appleWarrantyEnd: v.optional(v.union(v.number(), v.null())),
+    description: clearable(v.string()),
+    // Garantía Apple vigente (usados).
+    appleWarrantyEnd: clearable(v.number()),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     const { id, ...rest } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Producto no encontrado.");
-    await assertImei(ctx, args.category ?? existing.category, args.imei ?? existing.imei, id);
+    const imei = args.imei === undefined ? existing.imei : (args.imei ?? undefined);
+    await assertImei(ctx, args.category ?? existing.category, imei, id);
 
     // Si cambió la lista de fotos, borrar del storage las que se quitaron.
     if (args.images !== undefined) {
@@ -419,15 +425,13 @@ export const update = mutation({
       }
     }
 
-    // Limpiar campos undefined para no sobrescribir con undefined.
+    // Lo no enviado queda como estaba; `null` quita el campo (en un patch,
+    // `undefined` lo borra del documento).
     const patch: Partial<Doc<"products">> = { updatedAt: Date.now() };
     for (const [key, value] of Object.entries(rest)) {
-      if (value !== undefined) (patch as Record<string, unknown>)[key] = value;
+      if (value !== undefined) (patch as Record<string, unknown>)[key] = value ?? undefined;
     }
-    if (args.imei !== undefined) patch.imei = args.imei.trim() || undefined;
-    if (args.appleWarrantyEnd !== undefined) {
-      patch.appleWarrantyEnd = args.appleWarrantyEnd ?? undefined;
-    }
+    if (typeof args.imei === "string") patch.imei = args.imei.trim() || undefined;
     await ctx.db.patch(id, patch);
     return id;
   },

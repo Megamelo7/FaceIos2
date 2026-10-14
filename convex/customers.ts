@@ -2,7 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc } from "./_generated/dataModel";
-import { withSaleImei } from "./saleImei";
+import { withProductInfo } from "./saleImei";
 
 /** Normaliza un teléfono: quita espacios, guiones y paréntesis (conserva el +). */
 export function normalizePhone(p?: string): string | undefined {
@@ -79,7 +79,7 @@ export const get = query({
       .withIndex("by_customer", (q) => q.eq("customerId", args.id))
       .order("desc")
       .collect();
-    return { customer, sales: await withSaleImei(ctx, sales) };
+    return { customer, sales: await withProductInfo(ctx, sales) };
   },
 });
 

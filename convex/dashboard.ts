@@ -1,5 +1,6 @@
 import { query, QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { withProductInfo } from "./saleImei";
 
 async function requireAuth(ctx: QueryCtx): Promise<void> {
   const userId = await getAuthUserId(ctx);
@@ -26,6 +27,7 @@ export const overview = query({
     const stockBajo: {
       _id: string;
       name: string;
+      color?: string;
       quantity: number;
       minStock: number;
       category: string;
@@ -40,6 +42,7 @@ export const overview = query({
         stockBajo.push({
           _id: p._id,
           name: p.name,
+          color: p.color,
           quantity: p.quantity,
           minStock: min,
           category: p.category,
@@ -99,7 +102,7 @@ export const overview = query({
       ingresosMes,
       egresosMes,
       balanceCajaMes: ingresosMes - egresosMes,
-      recientes: transactions.slice(0, 8),
+      recientes: await withProductInfo(ctx, transactions.slice(0, 8)),
     };
   },
 });

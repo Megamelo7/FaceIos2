@@ -22,6 +22,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import ImageViewer from "../components/ImageViewer";
+import { ColorDot } from "../components/ui";
 
 /** WhatsApp de soporte técnico del sitio (distinto al de ventas de la tienda). */
 const SUPPORT_WHATSAPP = "5491152577608";
@@ -442,7 +443,12 @@ function ProductCard({
       {/* Info */}
       <div className="flex flex-1 flex-col p-5">
         <h4 className="font-semibold tracking-[-0.01em]">{product.name}</h4>
-        {specs && <p className="mt-0.5 text-sm text-black/55">{specs}</p>}
+        {specs && (
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-black/55">
+            <ColorDot color={product.color} className="h-3 w-3 ring-black/15" />
+            {specs}
+          </p>
+        )}
         {(product.batteryHealth || product.batteryType) && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs text-black/45">
             <BatteryCharging className="h-3.5 w-3.5" />

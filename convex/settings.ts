@@ -77,9 +77,10 @@ export const update = mutation({
 
 /**
  * Versión del sistema que muestra el menú del panel. No se edita desde el
- * panel: sólo desde Convex (CLI o dashboard).
- *   npx convex run settings:setVersion '{"version":"1.0.3"}'          (dev)
- *   npx convex run settings:setVersion '{"version":"1.0.3"}' --prod   (producción)
+ * panel: sólo desde Convex (CLI o dashboard). Dev usa la serie 1.2.x y
+ * producción la 1.5.x.
+ *   npx convex run settings:setVersion '{"version":"1.2.5"}'          (dev)
+ *   npx convex run settings:setVersion '{"version":"1.5.5"}' --prod   (producción)
  */
 export const setVersion = internalMutation({
   args: { version: v.string() },

@@ -4,7 +4,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { normalizePhone, normalizeEmail } from "./customers";
 import { usedWarrantyDays } from "./settings";
-import { withSaleImei } from "./saleImei";
+import { withProductInfo } from "./saleImei";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -109,126 +109,194 @@ export const list = query({
     if (args.from !== undefined) items = items.filter((t) => t.date >= args.from!);
     if (args.to !== undefined) items = items.filter((t) => t.date <= args.to!);
     if (args.limit) items = items.slice(0, args.limit);
-    return await withSaleImei(ctx, items);
+    return await withProductInfo(ctx, items);
   },
 });
 
-/** Registra una VENTA: descuenta stock y calcula la ganancia. */
+/** Un artículo de una venta. */
+const saleItemFields = {
+  productId: v.optional(v.id("products")),
+  productName: v.optional(v.string()),
+  quantity: v.number(),
+  unitPrice: v.number(),
+  // Monto original en ARS de este artículo (si se cargó en pesos).
+  fxAmount: v.optional(v.number()),
+  // Vencimiento de la garantía editado en la venta (usados); si no, sale de Ajustes.
+  warrantyEnd: v.optional(v.number()),
+};
+
+/** Datos comunes a todos los artículos de una venta. */
+const saleSharedFields = {
+  paymentMethod: v.optional(v.string()),
+  // Cliente: existente por id, o creado en el momento (nombre, teléfono, email).
+  customerId: v.optional(v.id("customers")),
+  newCustomer: v.optional(
+    v.object({
+      name: v.string(),
+      phone: v.optional(v.string()),
+      email: v.optional(v.string()),
+    }),
+  ),
+  customerName: v.optional(v.string()),
+  customerContact: v.optional(v.string()),
+  notes: v.optional(v.string()),
+  date: v.optional(v.number()),
+  fxRate: v.optional(v.number()),
+};
+
+type SaleItem = {
+  productId?: Id<"products">;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  fxAmount?: number;
+  warrantyEnd?: number;
+};
+
+type SaleShared = {
+  paymentMethod?: string;
+  customerId?: Id<"customers">;
+  newCustomer?: { name: string; phone?: string; email?: string };
+  customerName?: string;
+  customerContact?: string;
+  notes?: string;
+  date?: number;
+  fxRate?: number;
+};
+
+type SaleCustomer = {
+  customerId?: Id<"customers">;
+  customerName?: string;
+  customerContact?: string;
+};
+
+/** Resuelve el cliente: existente, o lo crea (reutiliza si el teléfono ya existe). */
+async function resolveSaleCustomer(ctx: MutationCtx, args: SaleShared): Promise<SaleCustomer> {
+  let customerId = args.customerId;
+  let customerName = args.customerName;
+  let customerContact = args.customerContact;
+  if (!customerId && args.newCustomer) {
+    const name = args.newCustomer.name.trim();
+    if (!name) throw new Error("El nombre del cliente es obligatorio.");
+    const phone = normalizePhone(args.newCustomer.phone);
+    const email = normalizeEmail(args.newCustomer.email);
+    const existing = phone
+      ? await ctx.db
+          .query("customers")
+          .withIndex("by_phone", (q) => q.eq("phone", phone))
+          .first()
+      : null;
+    customerId = existing
+      ? existing._id
+      : await ctx.db.insert("customers", {
+          name,
+          phone,
+          email,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+  }
+  if (customerId) {
+    const c = await ctx.db.get(customerId);
+    if (c) {
+      customerName = c.name;
+      customerContact = c.phone ?? c.email ?? customerContact;
+    }
+  }
+  return { customerId, customerName, customerContact };
+}
+
+/** Graba un artículo vendido: descuenta stock y calcula la ganancia. */
+async function insertSale(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  item: SaleItem,
+  shared: SaleShared,
+  customer: SaleCustomer,
+) {
+  if (item.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
+
+  const date = shared.date ?? Date.now();
+  let unitCost = 0;
+  let productName = item.productName ?? "Venta";
+  let productColor: string | undefined;
+  let category: string | undefined;
+  let imei: string | undefined;
+  let warranty = {};
+
+  if (item.productId) {
+    const product = await ctx.db.get(item.productId);
+    if (!product) throw new Error("Producto no encontrado.");
+    if (product.quantity < item.quantity) {
+      throw new Error(
+        `Stock insuficiente de ${product.name}. Disponible: ${product.quantity}, solicitado: ${item.quantity}.`,
+      );
+    }
+    warranty = await saleWarranty(ctx, product, date, item.warrantyEnd);
+    unitCost = product.costPrice;
+    productName = product.name;
+    productColor = product.color;
+    category = product.category;
+    imei = product.imei;
+    const newQty = product.quantity - item.quantity;
+    await ctx.db.patch(item.productId, {
+      quantity: newQty,
+      status: statusFromQuantity(newQty, product.status),
+      updatedAt: Date.now(),
+    });
+  }
+
+  const amount = item.unitPrice * item.quantity;
+  const profit = (item.unitPrice - unitCost) * item.quantity;
+
+  return await ctx.db.insert("transactions", {
+    type: "venta",
+    productId: item.productId,
+    productName,
+    productColor,
+    imei,
+    category,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    unitCost,
+    amount,
+    profit,
+    paymentMethod: shared.paymentMethod,
+    ...customer,
+    notes: shared.notes,
+    date,
+    createdBy: userId,
+    createdAt: Date.now(),
+    ...fxFields(amount, shared.fxRate, item.fxAmount),
+    ...warranty,
+  });
+}
+
+/** Registra una VENTA de un artículo: descuenta stock y calcula la ganancia. */
 export const recordSale = mutation({
-  args: {
-    productId: v.optional(v.id("products")),
-    productName: v.optional(v.string()),
-    quantity: v.number(),
-    unitPrice: v.number(),
-    paymentMethod: v.optional(v.string()),
-    // Cliente: existente por id, o creado en el momento (nombre, teléfono, email).
-    customerId: v.optional(v.id("customers")),
-    newCustomer: v.optional(
-      v.object({
-        name: v.string(),
-        phone: v.optional(v.string()),
-        email: v.optional(v.string()),
-      }),
-    ),
-    customerName: v.optional(v.string()),
-    customerContact: v.optional(v.string()),
-    notes: v.optional(v.string()),
-    date: v.optional(v.number()),
-    fxRate: v.optional(v.number()),
-    fxAmount: v.optional(v.number()),
-    // Vencimiento de la garantía editado en la venta (usados); si no, sale de Ajustes.
-    warrantyEnd: v.optional(v.number()),
-  },
+  args: { ...saleItemFields, ...saleSharedFields },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
-    if (args.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
+    const customer = await resolveSaleCustomer(ctx, args);
+    return await insertSale(ctx, userId, args, args, customer);
+  },
+});
 
-    const date = args.date ?? Date.now();
-    let unitCost = 0;
-    let productName = args.productName ?? "Venta";
-    let category: string | undefined;
-    let imei: string | undefined;
-    let warranty = {};
-
-    if (args.productId) {
-      const product = await ctx.db.get(args.productId);
-      if (!product) throw new Error("Producto no encontrado.");
-      if (product.quantity < args.quantity) {
-        throw new Error(
-          `Stock insuficiente. Disponible: ${product.quantity}, solicitado: ${args.quantity}.`,
-        );
-      }
-      warranty = await saleWarranty(ctx, product, date, args.warrantyEnd);
-      unitCost = product.costPrice;
-      productName = product.name;
-      category = product.category;
-      imei = product.imei;
-      const newQty = product.quantity - args.quantity;
-      await ctx.db.patch(args.productId, {
-        quantity: newQty,
-        status: statusFromQuantity(newQty, product.status),
-        updatedAt: Date.now(),
-      });
-    }
-
-    // Resolver el cliente: existente, o crearlo (reutiliza si el teléfono ya existe).
-    let customerId = args.customerId;
-    let customerName = args.customerName;
-    let customerContact = args.customerContact;
-    if (!customerId && args.newCustomer) {
-      const name = args.newCustomer.name.trim();
-      if (!name) throw new Error("El nombre del cliente es obligatorio.");
-      const phone = normalizePhone(args.newCustomer.phone);
-      const email = normalizeEmail(args.newCustomer.email);
-      const existing = phone
-        ? await ctx.db
-            .query("customers")
-            .withIndex("by_phone", (q) => q.eq("phone", phone))
-            .first()
-        : null;
-      customerId = existing
-        ? existing._id
-        : await ctx.db.insert("customers", {
-            name,
-            phone,
-            email,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-    }
-    if (customerId) {
-      const c = await ctx.db.get(customerId);
-      if (c) {
-        customerName = c.name;
-        customerContact = c.phone ?? c.email ?? customerContact;
-      }
-    }
-
-    const amount = args.unitPrice * args.quantity;
-    const profit = (args.unitPrice - unitCost) * args.quantity;
-
-    return await ctx.db.insert("transactions", {
-      type: "venta",
-      productId: args.productId,
-      productName,
-      imei,
-      category,
-      quantity: args.quantity,
-      unitPrice: args.unitPrice,
-      unitCost,
-      amount,
-      profit,
-      paymentMethod: args.paymentMethod,
-      customerId,
-      customerName,
-      customerContact,
-      notes: args.notes,
-      date,
-      createdBy: userId,
-      createdAt: Date.now(),
-      ...fxFields(amount, args.fxRate, args.fxAmount),
-      ...warranty,
-    });
+/**
+ * Registra una VENTA de varios artículos (mismo cliente, pago y fecha): un
+ * movimiento por artículo. Es todo o nada: si uno falla (p. ej. sin stock),
+ * no se graba ninguno.
+ */
+export const recordSales = mutation({
+  args: { items: v.array(v.object(saleItemFields)), ...saleSharedFields },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    if (args.items.length === 0) throw new Error("Agregá al menos un artículo.");
+    const { items, ...shared } = args;
+    const customer = await resolveSaleCustomer(ctx, shared);
+    const ids: Id<"transactions">[] = [];
+    for (const item of items) ids.push(await insertSale(ctx, userId, item, shared, customer));
+    return ids;
   },
 });
 
@@ -251,6 +319,7 @@ export const recordPurchase = mutation({
     if (args.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
 
     let productName = args.productName ?? "Compra";
+    let productColor: string | undefined;
     let category: string | undefined;
 
     if (args.productId) {
@@ -262,6 +331,7 @@ export const recordPurchase = mutation({
         );
       }
       productName = product.name;
+      productColor = product.color;
       category = product.category;
       const newQty = product.quantity + args.quantity;
       await ctx.db.patch(args.productId, {
@@ -276,6 +346,7 @@ export const recordPurchase = mutation({
       type: "compra",
       productId: args.productId,
       productName,
+      productColor,
       category,
       quantity: args.quantity,
       unitCost: args.unitCost,

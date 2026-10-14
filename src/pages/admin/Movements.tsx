@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
+import { FullPageLoader, Badge, EmptyState, Modal, ColorDot } from "../../components/ui";
 import TransactionModal from "../../components/TransactionModal";
 import ProductFormModal from "../../components/ProductFormModal";
 import SaleWarranty from "../../components/SaleWarranty";
@@ -22,6 +22,18 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
 } from "lucide-react";
+
+/** Estado vacío según el filtro elegido: texto y botón del mismo tipo. */
+const EMPTY_BY_TYPE: Record<TxType, { title: string; description: string; button: string }> = {
+  venta: { title: "Sin ventas", description: "Todavía no hay ventas registradas.", button: "Registrar venta" },
+  compra: { title: "Sin compras", description: "Todavía no hay compras registradas.", button: "Registrar compra" },
+  ingreso: {
+    title: "Sin otros ingresos",
+    description: "Todavía no hay otros ingresos registrados.",
+    button: "Registrar ingreso",
+  },
+  gasto: { title: "Sin gastos", description: "Todavía no hay gastos registrados.", button: "Registrar gasto" },
+};
 
 /**
  * Movimientos: ventas, compras, ingresos y gastos.
@@ -100,11 +112,19 @@ export default function Movements() {
       ) : txs.length === 0 ? (
         <EmptyState
           icon={Receipt}
-          title="Sin movimientos"
-          description="Registrá tu primera venta, compra, ingreso o gasto."
+          title={filter === "all" ? "Sin movimientos" : EMPTY_BY_TYPE[filter].title}
+          description={
+            filter === "all"
+              ? "Registrá tu primera venta, compra, ingreso o gasto."
+              : EMPTY_BY_TYPE[filter].description
+          }
           action={
-            <button className="btn-primary" onClick={() => setModalType("venta")}>
-              <Plus className="h-4 w-4" /> Registrar venta
+            <button
+              className="btn-primary"
+              onClick={() => setModalType(filter === "all" ? "venta" : filter)}
+            >
+              <Plus className="h-4 w-4" />{" "}
+              {filter === "all" ? "Registrar venta" : EMPTY_BY_TYPE[filter].button}
             </button>
           }
         />
@@ -140,7 +160,8 @@ export default function Movements() {
                         <Badge className={meta.color}>{meta.label}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-ink-900">
+                        <p className="flex items-center gap-1.5 font-medium text-ink-900">
+                          <ColorDot color={t.productColor} />
                           {t.productName ?? "—"}
                           {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
                         </p>

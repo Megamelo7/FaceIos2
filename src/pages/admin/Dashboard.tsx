@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
-import { StatCard, FullPageLoader, Badge } from "../../components/ui";
+import { StatCard, FullPageLoader, Badge, ColorDot } from "../../components/ui";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDateTime, formatNumber } from "../../lib/format";
 import { CATEGORIES, TX_META, Category, TxType } from "../../lib/categories";
@@ -150,7 +150,10 @@ export default function Dashboard() {
                       <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.color}`}>
                         <meta.icon className="h-4 w-4" />
                       </span>
-                      <span className="text-sm font-medium text-ink-800">{p.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-ink-800">
+                        <ColorDot color={p.color} />
+                        {p.name}
+                      </span>
                     </div>
                     <Badge
                       className={
@@ -190,9 +193,12 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     <Badge className={meta.color}>{meta.label}</Badge>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink-800">
-                        {t.productName ?? "—"}
-                        {t.quantity ? ` ×${t.quantity}` : ""}
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink-800">
+                        <ColorDot color={t.productColor} />
+                        <span className="truncate">
+                          {t.productName ?? "—"}
+                          {t.quantity ? ` ×${t.quantity}` : ""}
+                        </span>
                       </p>
                       <p className="text-xs text-ink-400">{formatDateTime(t.date)}</p>
                     </div>

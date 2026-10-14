@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
-import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
+import { FullPageLoader, Badge, EmptyState, Modal, ColorDot } from "../../components/ui";
 import ProductFormModal from "../../components/ProductFormModal";
 import TransactionModal from "../../components/TransactionModal";
 import { useCurrency } from "../../lib/useCurrency";
@@ -158,7 +158,12 @@ export default function Products() {
                               {p.name}
                               {p.featured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
                             </p>
-                            {subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>}
+                            {subtitle && (
+                              <p className="flex items-center gap-1.5 text-xs text-ink-400">
+                                <ColorDot color={p.color} />
+                                <span className="truncate">{subtitle}</span>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
