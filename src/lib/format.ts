@@ -1,15 +1,22 @@
 import { currencySymbol } from "./currencies";
 
 export function formatCurrency(value: number, currency = "ARS"): string {
+  const v = value ?? 0;
+  // Centavos sólo si los hay: $ 1.500 / US$ 1,04.
+  const digits = Number.isInteger(Math.round(v * 100) / 100) ? 0 : 2;
   try {
     return new Intl.NumberFormat("es-AR", {
       style: "currency",
       currency,
-      maximumFractionDigits: 0,
-    }).format(value ?? 0);
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(v);
   } catch {
     // Monedas sin código ISO (p. ej. USDT): símbolo + número.
-    return `${currencySymbol(currency)} ${Math.round(value ?? 0).toLocaleString("es-AR")}`;
+    return `${currencySymbol(currency)} ${v.toLocaleString("es-AR", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })}`;
   }
 }
 

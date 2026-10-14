@@ -46,6 +46,9 @@ export const APPLE_CATALOG: CatalogEntry[] = [
   { category: "iphone", name: "iPhone Air", colors: ["Negro espacial", "Blanco nube", "Dorado claro", "Azul cielo"], storages: GB("256GB", "512GB", "1TB") },
   { category: "iphone", name: "iPhone 17 Pro", colors: ["Naranja cósmico", "Azul profundo", "Plata"], storages: GB("256GB", "512GB", "1TB") },
   { category: "iphone", name: "iPhone 17 Pro Max", colors: ["Naranja cósmico", "Azul profundo", "Plata"], storages: GB("256GB", "512GB", "1TB", "2TB") },
+  { category: "iphone", name: "iPhone 18 Pro", colors: ["Borgoña", "Glaciar", "Plata", "Negro"], storages: GB("256GB", "512GB", "1TB", "2TB") },
+  { category: "iphone", name: "iPhone 18 Pro Max", colors: ["Borgoña", "Glaciar", "Plata", "Negro"], storages: GB("256GB", "512GB", "1TB", "2TB") },
+  { category: "iphone", name: "iPhone Duo", colors: ["Blanco estrella", "Cielo nocturno"], storages: GB("256GB", "512GB", "1TB", "2TB") },
 
   // ────────────────────────────── iPad ──────────────────────────────
   { category: "ipad", name: "iPad (9ª gen, 2021)", colors: ["Gris espacial", "Plata"], storages: GB("64GB", "256GB") },

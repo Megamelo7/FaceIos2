@@ -1,5 +1,6 @@
 import { ReactNode, useEffect } from "react";
 import { X, LucideIcon } from "lucide-react";
+import { deviceColorHex } from "../lib/deviceColors";
 
 export function Spinner({ className = "" }: { className?: string }) {
   return (
@@ -36,6 +37,25 @@ export function Badge({
   className?: string;
 }) {
   return <span className={`badge ${className}`}>{children}</span>;
+}
+
+/** Circulito con el color del equipo (no muestra nada si el color no se reconoce). */
+export function ColorDot({
+  color,
+  className = "h-2.5 w-2.5 ring-ink-400/60",
+}: {
+  color?: string | null;
+  className?: string;
+}) {
+  const hex = deviceColorHex(color);
+  if (!hex) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block shrink-0 rounded-full ring-1 ring-inset ${className}`}
+      style={{ backgroundColor: hex }}
+    />
+  );
 }
 
 export function Field({

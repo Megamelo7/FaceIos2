@@ -3,7 +3,9 @@ import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
-import { Modal, Field } from "./ui";
+import { Modal, Field, ColorDot } from "./ui";
+import { deviceColorHex } from "../lib/deviceColors";
+import ColorSelect from "./ColorSelect";
 import ImageUploader, { ImageItem } from "./ImageUploader";
 import DateInput from "./DateInput";
 import {
@@ -122,6 +124,13 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
     colorOptions.length > 0 &&
     !forceCustom.color &&
     (form.color === "" || colorOptions.includes(form.color));
+  /** Circulito del color escrito a mano, dentro del campo. */
+  const colorDot = deviceColorHex(form.color) ? (
+    <ColorDot
+      color={form.color}
+      className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ring-ink-400/60"
+    />
+  ) : null;
   const showStorageSelect =
     !!selectedModel &&
     storageOptions.length > 0 &&
@@ -257,10 +266,20 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
         : form.imei.trim() || undefined;
       if (isEdit && product) {
         // El stock no se edita acá: sólo cambia desde Movimientos.
+        // Lo que quedó vacío se manda como `null` para que se borre; si no, el
+        // backend deja el valor anterior.
         await update({
           id: product._id,
           ...payload,
-          imei: singleImei,
+          brand: payload.brand ?? null,
+          model: payload.model ?? null,
+          storage: payload.storage ?? null,
+          color: payload.color ?? null,
+          batteryHealth: payload.batteryHealth ?? null,
+          batteryType: payload.batteryType ?? null,
+          minStock: payload.minStock ?? null,
+          description: payload.description ?? null,
+          imei: singleImei ?? null,
           // Vacío (o equipo nuevo) quita la garantía Apple cargada antes.
           appleWarrantyEnd: payload.appleWarrantyEnd ?? null,
         });
@@ -424,31 +443,30 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
           {/* Color: combo del modelo o texto libre */}
           <Field label={isCatalog ? "Color" : "Color / Variante"}>
             {showColorSelect ? (
-              <select
-                className="input"
+              <ColorSelect
                 value={form.color}
-                onChange={(e) => onSelectColor(e.target.value)}
-              >
-                <option value="">— Elegí un color —</option>
-                {colorOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-                <option value={CUSTOM}>Otro (escribir a mano)…</option>
-              </select>
+                onChange={onSelectColor}
+                options={[
+                  { value: "", label: "— Elegí un color —", muted: true },
+                  ...colorOptions.map((c) => ({ value: c, label: c, color: c })),
+                  { value: CUSTOM, label: "Otro (escribir a mano)…", muted: true },
+                ]}
+              />
             ) : waitingForModel ? (
               <select className="input" disabled value="">
                 <option value="">Primero elegí el modelo</option>
               </select>
             ) : (
               <>
-                <input
-                  className="input"
-                  value={form.color}
-                  onChange={(e) => set("color", e.target.value)}
-                  placeholder="Opcional"
-                />
+                <div className="relative">
+                  <input
+                    className={`input ${colorDot ? "pl-9" : ""}`}
+                    value={form.color}
+                    onChange={(e) => set("color", e.target.value)}
+                    placeholder="Opcional"
+                  />
+                  {colorDot}
+                </div>
                 {!!selectedModel && colorOptions.length > 0 && backToList("color")}
               </>
             )}
@@ -627,6 +645,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
               <input
                 className="input"
                 type="number"
+                step="any"
                 value={form.costPrice}
                 onChange={(e) => set("costPrice", e.target.value)}
                 placeholder="0"
@@ -636,6 +655,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
               <input
                 className="input"
                 type="number"
+                step="any"
                 value={form.salePrice}
                 onChange={(e) => set("salePrice", e.target.value)}
                 placeholder="0"

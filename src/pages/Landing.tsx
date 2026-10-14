@@ -22,6 +22,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import ImageViewer from "../components/ImageViewer";
+import { ColorDot } from "../components/ui";
 
 /** WhatsApp de soporte técnico del sitio (distinto al de ventas de la tienda). */
 const SUPPORT_WHATSAPP = "5491152577608";
@@ -404,8 +405,10 @@ function ProductCard({
           {product.featured && <span className="badge bg-brand-600 text-white">Destacado</span>}
         </div>
         {!product.inStock && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
-            <span className="badge bg-[#0B0B0F] text-white">Sin stock · Consultar</span>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="badge bg-[#0B0B0F] text-white shadow-[0_4px_14px_rgba(0,0,0,0.25)]">
+              Sin stock · Consultar
+            </span>
           </div>
         )}
       </div>
@@ -442,7 +445,12 @@ function ProductCard({
       {/* Info */}
       <div className="flex flex-1 flex-col p-5">
         <h4 className="font-semibold tracking-[-0.01em]">{product.name}</h4>
-        {specs && <p className="mt-0.5 text-sm text-black/55">{specs}</p>}
+        {specs && (
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-black/55">
+            <ColorDot color={product.color} className="h-3 w-3 ring-black/15" />
+            {specs}
+          </p>
+        )}
         {(product.batteryHealth || product.batteryType) && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs text-black/45">
             <BatteryCharging className="h-3.5 w-3.5" />

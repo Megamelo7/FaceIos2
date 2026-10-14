@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
-import { FullPageLoader, Field, Modal, Badge, EmptyState } from "../../components/ui";
+import { FullPageLoader, Field, Modal, Badge, EmptyState, ColorDot } from "../../components/ui";
 import {
   CATEGORIES,
   CATALOG_CATEGORIES,
@@ -59,10 +59,10 @@ export default function Catalog() {
           combos. Accesorios y otros se cargan a mano.
         </p>
         <div className="flex shrink-0 gap-2">
-          {all && all.length === 0 && (
+          {all && (
             <button className="btn-secondary" onClick={runSeed} disabled={seeding}>
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Cargar catálogo Apple
+              {all.length === 0 ? "Cargar catálogo Apple" : "Sumar modelos nuevos"}
             </button>
           )}
           <button
@@ -145,6 +145,7 @@ export default function Catalog() {
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {m.colors.map((c) => (
                     <Badge key={c} className="bg-ink-100 text-ink-700">
+                      <ColorDot color={c} />
                       {c}
                     </Badge>
                   ))}
@@ -307,7 +308,7 @@ function ModelFormModal({
           />
         </Field>
         <Field label="Colores" hint="Escribí y apretá Enter (o coma) para agregar cada color.">
-          <ChipInput value={colors} onChange={setColors} placeholder="Titanio natural, Negro…" />
+          <ChipInput dots value={colors} onChange={setColors} placeholder="Titanio natural, Negro…" />
         </Field>
         <Field
           label="Capacidades"
@@ -326,10 +327,13 @@ function ChipInput({
   value,
   onChange,
   placeholder,
+  dots = false,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   placeholder?: string;
+  /** Muestra el circulito de color en cada chip. */
+  dots?: boolean;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -355,6 +359,7 @@ function ChipInput({
     <div className="input flex min-h-[44px] flex-wrap items-center gap-1.5 py-1.5">
       {value.map((v) => (
         <span key={v} className="badge bg-ink-100 text-ink-700">
+          {dots && <ColorDot color={v} />}
           {v}
           <button
             type="button"

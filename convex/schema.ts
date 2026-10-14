@@ -92,6 +92,8 @@ export default defineSchema({
     ),
     productId: v.optional(v.id("products")),
     productName: v.optional(v.string()),
+    // Color del equipo al momento del movimiento (snapshot, como el nombre).
+    productColor: v.optional(v.string()),
     // Ventas: IMEI (o N° de serie) del equipo vendido, guardado al vender.
     imei: v.optional(v.string()),
     category: v.optional(v.string()),
@@ -172,7 +174,7 @@ export default defineSchema({
     heroSubtitle: v.optional(v.string()),
     // Logo de la organización subido desde Ajustes. Si no hay, se usa /logo.png.
     logoId: v.optional(v.id("_storage")),
-    // Versión del sistema que se muestra en el menú del panel (ej. "1.0.3").
+    // Versión del sistema que se muestra en el menú del panel (dev 1.2.x, producción 1.5.x).
     appVersion: v.optional(v.string()),
     // Días de garantía que se sugieren al vender un equipo usado (Ajustes → Garantías).
     warrantyDays: v.optional(v.number()),

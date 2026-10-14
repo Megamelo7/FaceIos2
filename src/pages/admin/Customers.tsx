@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
-import { FullPageLoader, Field, Modal, Badge, EmptyState } from "../../components/ui";
+import { FullPageLoader, Field, Modal, Badge, EmptyState, ColorDot } from "../../components/ui";
 import SaleWarranty from "../../components/SaleWarranty";
 import SaleImei from "../../components/SaleImei";
 import { useCurrency } from "../../lib/useCurrency";
@@ -377,9 +377,12 @@ function CustomerDetailModal({ id, onClose }: { id: Id<"customers">; onClose: ()
                 {data.sales.map((t) => (
                   <div key={t._id} className="flex items-center justify-between px-3.5 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink-900">
-                        {t.productName ?? "Venta"}
-                        {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink-900">
+                        <ColorDot color={t.productColor} />
+                        <span className="truncate">
+                          {t.productName ?? "Venta"}
+                          {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
+                        </span>
                       </p>
                       <SaleImei sale={t} />
                       <p className="text-xs text-ink-400">
