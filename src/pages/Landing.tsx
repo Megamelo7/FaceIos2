@@ -405,8 +405,10 @@ function ProductCard({
           {product.featured && <span className="badge bg-brand-600 text-white">Destacado</span>}
         </div>
         {!product.inStock && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
-            <span className="badge bg-[#0B0B0F] text-white">Sin stock · Consultar</span>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="badge bg-[#0B0B0F] text-white shadow-[0_4px_14px_rgba(0,0,0,0.25)]">
+              Sin stock · Consultar
+            </span>
           </div>
         )}
       </div>

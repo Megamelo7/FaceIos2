@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -10,6 +10,7 @@ import SaleImei from "../../components/SaleImei";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
+import { Period, PERIODS, periodFrom } from "../../lib/periods";
 import {
   Plus,
   ShoppingCart,
@@ -24,15 +25,11 @@ import {
 } from "lucide-react";
 
 /** Estado vacío según el filtro elegido: texto y botón del mismo tipo. */
-const EMPTY_BY_TYPE: Record<TxType, { title: string; description: string; button: string }> = {
-  venta: { title: "Sin ventas", description: "Todavía no hay ventas registradas.", button: "Registrar venta" },
-  compra: { title: "Sin compras", description: "Todavía no hay compras registradas.", button: "Registrar compra" },
-  ingreso: {
-    title: "Sin otros ingresos",
-    description: "Todavía no hay otros ingresos registrados.",
-    button: "Registrar ingreso",
-  },
-  gasto: { title: "Sin gastos", description: "Todavía no hay gastos registrados.", button: "Registrar gasto" },
+const EMPTY_BY_TYPE: Record<TxType, { noun: string; registered: string; button: string }> = {
+  venta: { noun: "ventas", registered: "registradas", button: "Registrar venta" },
+  compra: { noun: "compras", registered: "registradas", button: "Registrar compra" },
+  ingreso: { noun: "otros ingresos", registered: "registrados", button: "Registrar ingreso" },
+  gasto: { noun: "gastos", registered: "registrados", button: "Registrar gasto" },
 };
 
 /**
@@ -41,16 +38,20 @@ const EMPTY_BY_TYPE: Record<TxType, { title: string; description: string; button
  */
 export default function Movements() {
   const [filter, setFilter] = useState<TxType | "all">("all");
+  const [period, setPeriod] = useState<Period>("mes");
   const [modalType, setModalType] = useState<TxType | null>(null);
   const [toDelete, setToDelete] = useState<Id<"transactions"> | null>(null);
   const [deleting, setDeleting] = useState(false);
   // Compra de un producto NUEVO: abre el formulario de producto con todos los combos.
   const [newProductOpen, setNewProductOpen] = useState(false);
 
+  const from = useMemo(() => periodFrom(period), [period]);
   const txs = useQuery(api.transactions.list, {
     type: filter === "all" ? undefined : filter,
+    from,
     limit: 200,
   });
+  const empty = filter === "all" ? null : EMPTY_BY_TYPE[filter];
   const remove = useMutation(api.transactions.remove);
   const { money, moneyIn } = useCurrency();
 
@@ -94,7 +95,14 @@ export default function Movements() {
         </span>
       </p>
 
-      {/* Filtros */}
+      {/* Filtros: período y tipo */}
+      <div className="flex flex-wrap gap-2">
+        {PERIODS.map((p) => (
+          <FilterChip key={p.key} active={period === p.key} onClick={() => setPeriod(p.key)}>
+            {p.label}
+          </FilterChip>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
           Todos
@@ -112,19 +120,20 @@ export default function Movements() {
       ) : txs.length === 0 ? (
         <EmptyState
           icon={Receipt}
-          title={filter === "all" ? "Sin movimientos" : EMPTY_BY_TYPE[filter].title}
+          title={empty ? `Sin ${empty.noun}` : "Sin movimientos"}
           description={
-            filter === "all"
-              ? "Registrá tu primera venta, compra, ingreso o gasto."
-              : EMPTY_BY_TYPE[filter].description
+            period !== "todo"
+              ? `No hay ${empty?.noun ?? "movimientos"} en este período.`
+              : empty
+                ? `Todavía no hay ${empty.noun} ${empty.registered}.`
+                : "Registrá tu primera venta, compra, ingreso o gasto."
           }
           action={
             <button
               className="btn-primary"
               onClick={() => setModalType(filter === "all" ? "venta" : filter)}
             >
-              <Plus className="h-4 w-4" />{" "}
-              {filter === "all" ? "Registrar venta" : EMPTY_BY_TYPE[filter].button}
+              <Plus className="h-4 w-4" /> {empty?.button ?? "Registrar venta"}
             </button>
           }
         />
