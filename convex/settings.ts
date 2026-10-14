@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation, QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -26,6 +26,15 @@ async function readSettings(ctx: QueryCtx) {
   return { ...DEFAULTS, ...(doc ?? {}), logoUrl: logoUrl ?? "" };
 }
 
+/** Días de garantía de los equipos usados (Ajustes → Garantías), si están configurados. */
+export async function usedWarrantyDays(ctx: QueryCtx): Promise<number | undefined> {
+  const doc = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", KEY))
+    .unique();
+  return doc?.warrantyDays;
+}
+
 /** Configuración pública de la tienda (para la landing). */
 export const get = query({
   args: {},
@@ -43,19 +52,26 @@ export const update = mutation({
     currency: v.optional(v.string()),
     heroTitle: v.optional(v.string()),
     heroSubtitle: v.optional(v.string()),
+    // Garantía de usados en días; `null` la deja sin configurar.
+    warrantyDays: v.optional(v.union(v.number(), v.null())),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { warrantyDays, ...args }) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) throw new Error("No autorizado.");
+    if (warrantyDays != null && !(Number.isInteger(warrantyDays) && warrantyDays >= 0)) {
+      throw new ConvexError("Los días de garantía tienen que ser un número entero.");
+    }
+    const data =
+      warrantyDays === undefined ? args : { ...args, warrantyDays: warrantyDays ?? undefined };
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", KEY))
       .unique();
     if (existing) {
-      await ctx.db.patch(existing._id, args);
+      await ctx.db.patch(existing._id, data);
       return existing._id;
     }
-    return await ctx.db.insert("settings", { key: KEY, ...args });
+    return await ctx.db.insert("settings", { key: KEY, ...data });
   },
 });
 

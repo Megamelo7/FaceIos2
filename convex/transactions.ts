@@ -1,8 +1,62 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { normalizePhone, normalizeEmail } from "./customers";
+import { usedWarrantyDays } from "./settings";
+import { withSaleImei } from "./saleImei";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Equipos a los que se les registra garantía al venderlos. */
+const WARRANTY_CATEGORIES = ["iphone", "ipad", "notebook", "airpods"];
+
+/**
+ * Garantía de la venta de un equipo:
+ *  - nuevo → Garantía Apple sin fechas (la calcula Apple desde la activación);
+ *  - usado con garantía Apple vigente a la fecha de venta → Garantía Apple
+ *    hasta la fecha cargada en su ficha;
+ *  - usado sin garantía Apple → de la tienda, desde la fecha de venta y por los
+ *    días de Ajustes, salvo que en la venta se haya editado el vencimiento.
+ * Cuando hay fechas, los días quedan guardados en la venta.
+ */
+async function saleWarranty(
+  ctx: MutationCtx,
+  product: Doc<"products">,
+  date: number,
+  editedEnd?: number,
+) {
+  if (!WARRANTY_CATEGORIES.includes(product.category)) return {};
+  if (product.condition === "nuevo") return { warrantyType: "apple" as const };
+  const appleEnd = product.appleWarrantyEnd;
+  if (appleEnd !== undefined && appleEnd >= date) {
+    return {
+      warrantyType: "apple" as const,
+      warrantyDays: Math.round((appleEnd - date) / DAY_MS),
+      warrantyStart: date,
+      warrantyEnd: appleEnd,
+    };
+  }
+  let end = editedEnd;
+  if (end === undefined) {
+    const days = await usedWarrantyDays(ctx);
+    if (days === undefined) {
+      throw new ConvexError(
+        "Configurá los días de garantía de usados en Ajustes o editá la garantía en la venta.",
+      );
+    }
+    end = date + days * DAY_MS;
+  }
+  if (end < date) {
+    throw new ConvexError("El vencimiento de la garantía no puede ser anterior a la fecha de venta.");
+  }
+  return {
+    warrantyType: "tienda" as const,
+    warrantyDays: Math.round((end - date) / DAY_MS),
+    warrantyStart: date,
+    warrantyEnd: end,
+  };
+}
 
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   const userId = await getAuthUserId(ctx);
@@ -55,7 +109,7 @@ export const list = query({
     if (args.from !== undefined) items = items.filter((t) => t.date >= args.from!);
     if (args.to !== undefined) items = items.filter((t) => t.date <= args.to!);
     if (args.limit) items = items.slice(0, args.limit);
-    return items;
+    return await withSaleImei(ctx, items);
   },
 });
 
@@ -82,14 +136,19 @@ export const recordSale = mutation({
     date: v.optional(v.number()),
     fxRate: v.optional(v.number()),
     fxAmount: v.optional(v.number()),
+    // Vencimiento de la garantía editado en la venta (usados); si no, sale de Ajustes.
+    warrantyEnd: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     if (args.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
 
+    const date = args.date ?? Date.now();
     let unitCost = 0;
     let productName = args.productName ?? "Venta";
     let category: string | undefined;
+    let imei: string | undefined;
+    let warranty = {};
 
     if (args.productId) {
       const product = await ctx.db.get(args.productId);
@@ -99,9 +158,11 @@ export const recordSale = mutation({
           `Stock insuficiente. Disponible: ${product.quantity}, solicitado: ${args.quantity}.`,
         );
       }
+      warranty = await saleWarranty(ctx, product, date, args.warrantyEnd);
       unitCost = product.costPrice;
       productName = product.name;
       category = product.category;
+      imei = product.imei;
       const newQty = product.quantity - args.quantity;
       await ctx.db.patch(args.productId, {
         quantity: newQty,
@@ -150,6 +211,7 @@ export const recordSale = mutation({
       type: "venta",
       productId: args.productId,
       productName,
+      imei,
       category,
       quantity: args.quantity,
       unitPrice: args.unitPrice,
@@ -161,10 +223,11 @@ export const recordSale = mutation({
       customerName,
       customerContact,
       notes: args.notes,
-      date: args.date ?? Date.now(),
+      date,
       createdBy: userId,
       createdAt: Date.now(),
       ...fxFields(amount, args.fxRate, args.fxAmount),
+      ...warranty,
     });
   },
 });

@@ -61,6 +61,7 @@ export default function Login() {
           <img src="/logo.png" alt="FaceIos2" className="h-12 w-auto" />
         </Link>
         <div className="relative">
+          <img src="/mascota.svg" alt="" className="-ml-4 mb-4 h-56 w-56 motion-safe:animate-float" />
           <h1 className="text-3xl font-bold leading-tight">Panel de gestión</h1>
           <p className="mt-3 max-w-sm text-ink-400">
             Controlá stock, precios, movimientos y el balance de tu negocio de iPhones y

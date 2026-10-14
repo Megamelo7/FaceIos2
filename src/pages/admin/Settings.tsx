@@ -23,6 +23,7 @@ export default function Settings() {
     currency: "ARS",
     heroTitle: "",
     heroSubtitle: "",
+    warrantyDays: "",
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,6 +44,7 @@ export default function Settings() {
         currency: settings.currency ?? "ARS",
         heroTitle: settings.heroTitle ?? "",
         heroSubtitle: settings.heroSubtitle ?? "",
+        warrantyDays: settings.warrantyDays?.toString() ?? "",
       });
     }
   }, [settings]);
@@ -65,7 +67,11 @@ export default function Settings() {
     setConfirmOpen(false);
     setSaving(true);
     try {
-      await update(form);
+      const days = form.warrantyDays.trim();
+      await update({
+        ...form,
+        warrantyDays: days === "" ? null : Math.max(0, Math.round(Number(days))),
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -205,7 +211,29 @@ export default function Settings() {
           </Field>
           <Field label="Dirección / Zona">
             <input className="input" value={form.address} onChange={(e) => set("address", e.target.value)} />
-          </Field>        </div>
+          </Field>
+        </div>
+
+        <div className="mt-6 border-t border-ink-100 pt-5">
+          <h4 className="mb-3 text-sm font-semibold text-ink-800">Garantías</h4>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label="Garantía de usados (días)"
+              hint="Al vender un equipo usado, el fin de la garantía se calcula con estos días. Los nuevos llevan Garantía Apple."
+            >
+              <input
+                className="input"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={form.warrantyDays}
+                onChange={(e) => set("warrantyDays", e.target.value)}
+                placeholder="Ej: 90"
+              />
+            </Field>
+          </div>
+        </div>
 
         <div className="mt-6 border-t border-ink-100 pt-5">
           <h4 className="mb-3 text-sm font-semibold text-ink-800">Portada de la tienda</h4>

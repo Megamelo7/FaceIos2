@@ -4,6 +4,8 @@ import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Field, Modal, Badge, EmptyState } from "../../components/ui";
+import SaleWarranty from "../../components/SaleWarranty";
+import SaleImei from "../../components/SaleImei";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import {
@@ -379,10 +381,12 @@ function CustomerDetailModal({ id, onClose }: { id: Id<"customers">; onClose: ()
                         {t.productName ?? "Venta"}
                         {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
                       </p>
+                      <SaleImei sale={t} />
                       <p className="text-xs text-ink-400">
                         {formatDate(t.date)}
                         {t.paymentMethod ? ` · ${t.paymentMethod}` : ""}
                       </p>
+                      <SaleWarranty sale={t} />
                     </div>
                     <span className="text-sm font-semibold text-emerald-600">{money(t.amount)}</span>
                   </div>

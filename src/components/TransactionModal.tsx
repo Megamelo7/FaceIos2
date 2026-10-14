@@ -1,14 +1,23 @@
 import { useState, FormEvent, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
 import CustomerPicker, { CustomerSelection } from "./CustomerPicker";
-import { TX_META, TxType, PAYMENT_METHODS } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue } from "../lib/format";
+import DateInput from "./DateInput";
+import { TX_META, TxType, PAYMENT_METHODS, CONDITIONS } from "../lib/categories";
+import {
+  toDateInputValue,
+  fromDateInputValue,
+  addDaysToDateInput,
+  daysBetweenDateInputs,
+  formatDate,
+} from "../lib/format";
+import { warrantyTypeFor } from "../lib/warranty";
 import { useCurrency } from "../lib/useCurrency";
 import FxFields, { useFx, InputCurrency } from "./FxFields";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, ShieldCheck } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -31,6 +40,7 @@ export default function TransactionModal({
   const recordSale = useMutation(api.transactions.recordSale);
   const recordPurchase = useMutation(api.transactions.recordPurchase);
   const recordManual = useMutation(api.transactions.recordManual);
+  const settings = useQuery(api.settings.getAdmin);
   const { money, moneyIn } = useCurrency();
   const fx = useFx();
 
@@ -46,6 +56,10 @@ export default function TransactionModal({
   const [date, setDate] = useState(toDateInputValue(Date.now()));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // "Editar garantía" (usados): vencimiento cargado a mano; null = el de Ajustes.
+  const [editedWarrantyEnd, setEditedWarrantyEnd] = useState<string | null>(null);
+  const [editingWarranty, setEditingWarranty] = useState(false);
+  const [warrantyDraft, setWarrantyDraft] = useState("");
 
   const isSale = type === "venta";
   const isPurchase = type === "compra";
@@ -56,6 +70,37 @@ export default function TransactionModal({
     () => products?.find((p) => p._id === productId),
     [products, productId],
   );
+
+  // Garantía al vender equipos: nuevo → Apple (sin fechas: la calcula Apple desde
+  // la activación); usado → de la tienda, desde la fecha de venta y por los días
+  // de Ajustes (el backend la calcula igual al registrar), o hasta el vencimiento
+  // que se cargue con "Editar garantía".
+  const warrantyType =
+    isSale && selectedProduct ? warrantyTypeFor(selectedProduct, date) : null;
+  // Usado con garantía Apple vigente: vence en la fecha de su ficha.
+  const appleWarrantyEnd =
+    warrantyType === "apple" && selectedProduct?.condition !== "nuevo"
+      ? selectedProduct?.appleWarrantyEnd
+      : undefined;
+  // Usado con garantía Apple cargada pero ya vencida a la fecha de venta.
+  const expiredAppleWarranty =
+    warrantyType === "tienda" ? selectedProduct?.appleWarrantyEnd : undefined;
+  const settingsDays = settings?.warrantyDays;
+  const warrantyEnd =
+    editedWarrantyEnd ??
+    (date && settingsDays !== undefined ? addDaysToDateInput(date, settingsDays) : null);
+  const warrantyDays = date && warrantyEnd ? daysBetweenDateInputs(date, warrantyEnd) : null;
+
+  function openWarrantyEditor() {
+    setWarrantyDraft(warrantyEnd ?? date);
+    setEditingWarranty(true);
+  }
+
+  function saveWarrantyEdit() {
+    if (!warrantyDraft || (date && warrantyDraft < date)) return;
+    setEditedWarrantyEnd(warrantyDraft);
+    setEditingWarranty(false);
+  }
 
   // VENTA: sólo artículos con stock. COMPRA (reposición): sólo artículos por cantidad;
   // los equipos con IMEI (iPhone / iPad) son únicos y entran como producto nuevo.
@@ -72,6 +117,8 @@ export default function TransactionModal({
       return;
     }
     setProductId(id);
+    setEditedWarrantyEnd(null);
+    setEditingWarranty(false);
     const p = products?.find((x) => x._id === id);
     if (p) setUnitValue(fx.convertFromStore(isSale ? p.salePrice : p.costPrice));
   }
@@ -104,6 +151,7 @@ export default function TransactionModal({
     e.preventDefault();
     setError(null);
     if (fx.error) return setError(fx.error);
+    if (!date) return setError("Ingresá una fecha válida (dd/mm/aaaa).");
     setSaving(true);
     try {
       const when = fromDateInputValue(date);
@@ -111,6 +159,16 @@ export default function TransactionModal({
         if (!productId) throw new Error("Elegí un producto.");
         if (customer?.kind === "new" && !customer.data.name.trim()) {
           throw new Error("Ingresá el nombre del cliente (o elegí uno existente).");
+        }
+        if (warrantyType === "tienda") {
+          if (!warrantyEnd) {
+            throw new Error(
+              "Configurá los días de garantía de usados en Ajustes o usá “Editar garantía”.",
+            );
+          }
+          if (warrantyEnd < date) {
+            throw new Error("El vencimiento de la garantía no puede ser anterior a la fecha de venta.");
+          }
         }
         await recordSale({
           productId: selectedProduct!._id,
@@ -130,6 +188,10 @@ export default function TransactionModal({
               : undefined,
           notes: notes.trim() || undefined,
           date: when,
+          warrantyEnd:
+            warrantyType === "tienda" && editedWarrantyEnd
+              ? fromDateInputValue(editedWarrantyEnd)
+              : undefined,
         });
       } else if (isPurchase) {
         if (!productId) throw new Error("Elegí un producto.");
@@ -159,7 +221,13 @@ export default function TransactionModal({
       }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo registrar.");
+      setError(
+        err instanceof ConvexError
+          ? String(err.data)
+          : err instanceof Error
+            ? err.message
+            : "No se pudo registrar.",
+      );
       setSaving(false);
     }
   }
@@ -219,7 +287,9 @@ export default function TransactionModal({
                 {selectable?.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.name}
-                    {p.storage ? ` ${p.storage}` : ""} · stock: {p.quantity}
+                    {p.storage ? ` ${p.storage}` : ""}
+                    {p.imei ? ` · ${p.category === "notebook" ? "S/N" : "IMEI"} ${p.imei}` : ""} ·
+                    stock: {p.quantity}
                   </option>
                 ))}
               </select>
@@ -296,14 +366,124 @@ export default function TransactionModal({
             </select>
           </Field>
           <Field label="Fecha">
-            <input
-              className="input"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <DateInput value={date} onChange={setDate} />
           </Field>
         </div>
+
+        {warrantyType === "apple" && (
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span>
+              <strong>Garantía Apple</strong>
+              {appleWarrantyEnd !== undefined && (
+                <> · equipo usado, vigente hasta el {formatDate(appleWarrantyEnd)}</>
+              )}
+            </span>
+          </div>
+        )}
+        {warrantyType === "tienda" && (
+          <div
+            className={`rounded-xl px-3.5 py-2.5 text-sm ${
+              warrantyEnd ? "bg-ink-50 text-ink-700" : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                {warrantyEnd && date ? (
+                  <>
+                    <strong>Garantía de la tienda</strong> ·{" "}
+                    {CONDITIONS[selectedProduct!.condition].label.toLowerCase()}: {warrantyDays}{" "}
+                    días, del {formatDate(fromDateInputValue(date))} al{" "}
+                    {formatDate(fromDateInputValue(warrantyEnd))}
+                    <span className="block text-xs text-ink-400">
+                      {editedWarrantyEnd
+                        ? "Vencimiento editado en esta venta."
+                        : "Según la fecha de venta y los días de garantía de Ajustes."}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Para vender equipos usados, configurá los <strong>días de garantía</strong> en
+                    Ajustes o cargá el vencimiento con “Editar garantía”.
+                  </>
+                )}
+                {expiredAppleWarranty !== undefined && (
+                  <span className="mt-1 block text-xs font-medium text-amber-700">
+                    La garantía Apple cargada en la ficha de este equipo venció el{" "}
+                    {formatDate(expiredAppleWarranty)}. Si está mal, corregila en Stock.
+                  </span>
+                )}
+              </div>
+              {!editingWarranty && (
+                <button
+                  type="button"
+                  className="btn-secondary shrink-0 px-2.5 py-1.5 text-xs"
+                  onClick={openWarrantyEditor}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Editar garantía
+                </button>
+              )}
+            </div>
+
+            {/* Pantallita para editar el vencimiento */}
+            {editingWarranty && (
+              <div className="mt-3 rounded-xl border border-ink-200 bg-surface p-3 animate-fade-in">
+                <Field label="Vence el">
+                  <DateInput
+                    value={warrantyDraft}
+                    min={date || undefined}
+                    onChange={setWarrantyDraft}
+                    // Enter guarda la garantía (sin registrar la venta).
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveWarrantyEdit();
+                      }
+                    }}
+                    autoFocus
+                  />
+                </Field>
+                {warrantyDraft && date && (
+                  <p className="mt-1 text-xs text-ink-400">
+                    {warrantyDraft < date
+                      ? "No puede vencer antes de la fecha de venta."
+                      : `${daysBetweenDateInputs(date, warrantyDraft)} días desde la fecha de venta.`}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                  {editedWarrantyEnd && settingsDays !== undefined && (
+                    <button
+                      type="button"
+                      className="btn-ghost mr-auto px-3 py-1.5 text-xs"
+                      onClick={() => {
+                        setEditedWarrantyEnd(null);
+                        setEditingWarranty(false);
+                      }}
+                    >
+                      Volver a los días de Ajustes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary px-3 py-1.5 text-xs"
+                    onClick={() => setEditingWarranty(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary px-3 py-1.5 text-xs"
+                    disabled={!warrantyDraft || (!!date && warrantyDraft < date)}
+                    onClick={saveWarrantyEdit}
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {isSale && (
           <Field label="Cliente">

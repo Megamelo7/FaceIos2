@@ -1,6 +1,12 @@
 /** Formato de IMEI: exactamente 15 dígitos (sin validar dígito verificador). */
 export const IMEI_LENGTH = 15;
 
+/**
+ * Consulta de IMEI de Apple en imeipro.info. La página no toma el IMEI por URL
+ * y pide un captcha: se abre vacía y el IMEI se pega a mano.
+ */
+export const IMEI_CHECK_URL = "https://www.imeipro.info/check_imei_iphone.html";
+
 export function normalizeImei(input: string): string {
   return input.replace(/\D/g, "");
 }

@@ -98,6 +98,15 @@ export default function CustomerPicker({ value, onChange }: Props) {
         />
       </div>
       <div className="max-h-44 overflow-y-auto rounded-xl border border-ink-200 bg-surface">
+        {/* Primero de todo: crear uno nuevo (queda fijo arriba al scrollear la lista). */}
+        <button
+          type="button"
+          onClick={() => onChange({ kind: "new", data: { name: q.trim(), phone: "", email: "" } })}
+          className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-ink-100 bg-surface px-3.5 py-2 text-left text-sm font-semibold text-brand-600 hover:bg-brand-50"
+        >
+          <UserPlus className="h-4 w-4" />
+          Crear cliente nuevo{q.trim() ? ` "${q.trim()}"` : ""}
+        </button>
         {results.map((c) => (
           <button
             type="button"
@@ -120,14 +129,6 @@ export default function CustomerPicker({ value, onChange }: Props) {
             {q ? "Sin resultados." : "Todavía no hay clientes cargados."}
           </p>
         )}
-        <button
-          type="button"
-          onClick={() => onChange({ kind: "new", data: { name: q.trim(), phone: "", email: "" } })}
-          className="flex w-full items-center gap-2 border-t border-ink-100 px-3.5 py-2 text-left text-sm font-semibold text-brand-600 hover:bg-brand-50"
-        >
-          <UserPlus className="h-4 w-4" />
-          Crear cliente nuevo{q.trim() ? ` "${q.trim()}"` : ""}
-        </button>
       </div>
       <p className="text-xs text-ink-400">Opcional: también podés registrar la venta sin cliente.</p>
     </div>
