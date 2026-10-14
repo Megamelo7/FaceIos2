@@ -27,7 +27,13 @@ export default function Dashboard() {
 
   return (
     <div className="relative space-y-6">
-      {userName && <h2 className="text-2xl font-bold text-ink-900">Hola, {userName}</h2>}
+      {userName && (
+        <div className="flex items-center gap-2">
+          {/* La mascota saluda junto al nombre. */}
+          <img src="/mascota.svg" alt="" className="-my-3 h-20 w-20 shrink-0" />
+          <h2 className="text-2xl font-bold text-ink-900">Hola, {userName}</h2>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
