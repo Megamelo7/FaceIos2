@@ -6,6 +6,8 @@ import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Field, Modal, Badge, EmptyState, ColorDot } from "../../components/ui";
 import SaleWarranty from "../../components/SaleWarranty";
 import SaleImei from "../../components/SaleImei";
+import SaleReceiptModal from "../../components/SaleReceiptModal";
+import { receiptLabel } from "../../lib/receiptPdf";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import {
@@ -19,6 +21,8 @@ import {
   Mail,
   ShoppingBag,
   Eye,
+  ChevronRight,
+  FileText,
 } from "lucide-react";
 
 type Customer = Doc<"customers">;
@@ -325,9 +329,59 @@ function CustomerFormModal({
 
 /* ───────────────────────── Detalle + historial ───────────────────────── */
 
+type Sale = Doc<"transactions">;
+
+type SaleGroup = {
+  key: string;
+  number?: number;
+  date: number;
+  paymentMethod?: string;
+  items: Sale[];
+  total: number;
+};
+
+/**
+ * Una entrada por venta: junta los artículos que comparten N° de comprobante
+ * (las ventas anteriores al N° quedan de a una). Más nuevas primero.
+ */
+function groupSales(sales: Sale[]): SaleGroup[] {
+  const groups: SaleGroup[] = [];
+  const byKey = new Map<string, SaleGroup>();
+  for (const t of sales) {
+    const key = t.receiptNumber !== undefined ? `n${t.receiptNumber}` : t._id;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, number: t.receiptNumber, date: t.date, paymentMethod: t.paymentMethod, items: [], total: 0 };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.items.push(t);
+    g.total += t.amount;
+  }
+  // Los artículos, en el orden en que se cargaron en la venta.
+  for (const g of groups) g.items.sort((a, b) => a._creationTime - b._creationTime);
+  return groups.sort((a, b) => b.date - a.date);
+}
+
 function CustomerDetailModal({ id, onClose }: { id: Id<"customers">; onClose: () => void }) {
   const data = useQuery(api.customers.get, { id });
   const { money } = useCurrency();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // Venta de la que se muestra el comprobante (reemplaza a este modal hasta cerrarlo).
+  const [receiptFor, setReceiptFor] = useState<Id<"transactions"> | null>(null);
+
+  if (receiptFor) {
+    return <SaleReceiptModal saleId={receiptFor} onClose={() => setReceiptFor(null)} />;
+  }
+
+  const groups = data ? groupSales(data.sales) : [];
+  const toggle = (key: string) =>
+    setExpanded((e) => {
+      const next = new Set(e);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   return (
     <Modal open onClose={onClose} title="Historial del cliente">
@@ -361,39 +415,93 @@ function CustomerDetailModal({ id, onClose }: { id: Id<"customers">; onClose: ()
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-ink-800">
-                Compras ({data.sales.length})
-              </h4>
+              <h4 className="text-sm font-semibold text-ink-800">Compras ({groups.length})</h4>
               <span className="text-sm font-semibold text-ink-900">
-                {money(data.sales.reduce((s, t) => s + t.amount, 0))}
+                {money(groups.reduce((s, g) => s + g.total, 0))}
               </span>
             </div>
-            {data.sales.length === 0 ? (
+            {groups.length === 0 ? (
               <p className="rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-500">
                 Todavía no tiene compras registradas.
               </p>
             ) : (
               <div className="divide-y divide-ink-100 rounded-xl border border-ink-100">
-                {data.sales.map((t) => (
-                  <div key={t._id} className="flex items-center justify-between px-3.5 py-2.5">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink-900">
-                        <ColorDot color={t.productColor} />
-                        <span className="truncate">
-                          {t.productName ?? "Venta"}
-                          {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
+                {groups.map((g) => {
+                  const open = expanded.has(g.key);
+                  const count = g.items.reduce((s, t) => s + (t.quantity ?? 1), 0);
+                  return (
+                    <div key={g.key}>
+                      <div className="flex items-center gap-2 px-3.5 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggle(g.key)}
+                          className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                          aria-expanded={open}
+                        >
+                          <ChevronRight
+                            className={`mt-0.5 h-4 w-4 shrink-0 text-ink-400 transition-transform ${
+                              open ? "rotate-90" : ""
+                            }`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-ink-900">
+                              {g.number !== undefined ? `Venta N° ${receiptLabel(g.number)}` : "Venta"}
+                              <span className="font-normal text-ink-400">
+                                {" "}
+                                · {count} {count === 1 ? "artículo" : "artículos"}
+                              </span>
+                            </span>
+                            <span className="block text-xs text-ink-400">
+                              {formatDate(g.date)}
+                              {g.paymentMethod ? ` · ${g.paymentMethod}` : ""}
+                            </span>
+                            {!open && (
+                              <span className="block truncate text-xs text-ink-500">
+                                {g.items.map((t) => t.productName ?? "Artículo").join(", ")}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                        <span className="shrink-0 text-sm font-semibold text-emerald-600">
+                          {money(g.total)}
                         </span>
-                      </p>
-                      <SaleImei sale={t} />
-                      <p className="text-xs text-ink-400">
-                        {formatDate(t.date)}
-                        {t.paymentMethod ? ` · ${t.paymentMethod}` : ""}
-                      </p>
-                      <SaleWarranty sale={t} />
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-brand-50 hover:text-brand-600"
+                          onClick={() => setReceiptFor(g.items[0]._id)}
+                          title="Comprobante (reimprimir / enviar por WhatsApp)"
+                          aria-label="Comprobante de la venta"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {open && (
+                        <div className="space-y-2.5 border-t border-ink-100 bg-ink-50/50 py-2.5 pl-10 pr-3.5">
+                          {g.items.map((t) => (
+                            <div key={t._id} className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="flex items-center gap-1.5 text-sm font-medium text-ink-900">
+                                  <ColorDot color={t.productColor} />
+                                  <span className="truncate">
+                                    {t.productName ?? "Artículo"}
+                                    {t.quantity && t.quantity > 1 ? (
+                                      <span className="text-ink-400"> ×{t.quantity}</span>
+                                    ) : (
+                                      ""
+                                    )}
+                                  </span>
+                                </p>
+                                <SaleImei sale={t} />
+                                <SaleWarranty sale={t} />
+                              </div>
+                              <span className="shrink-0 text-sm text-ink-700">{money(t.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <span className="text-sm font-semibold text-emerald-600">{money(t.amount)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

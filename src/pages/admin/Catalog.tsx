@@ -20,24 +20,18 @@ export default function Catalog() {
   const [editing, setEditing] = useState<Model | null>(null);
   const [toDelete, setToDelete] = useState<Model | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [seeding, setSeeding] = useState(false);
+  // "Cargar catálogo Apple" / "Sumar modelos nuevos": primero muestra la vista previa.
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
 
   const all = useQuery(api.catalog.list, {});
   const remove = useMutation(api.catalog.remove);
-  const seed = useMutation(api.catalog.seed);
 
   const models = (all ?? []).filter((m) => m.category === active);
 
-  async function runSeed() {
-    setSeeding(true);
+  function openPreview() {
     setSeedMsg(null);
-    try {
-      const msg = await seed({});
-      setSeedMsg(msg);
-    } finally {
-      setSeeding(false);
-    }
+    setPreviewOpen(true);
   }
 
   async function confirmDelete() {
@@ -60,8 +54,8 @@ export default function Catalog() {
         </p>
         <div className="flex shrink-0 gap-2">
           {all && (
-            <button className="btn-secondary" onClick={runSeed} disabled={seeding}>
-              {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <button className="btn-secondary" onClick={openPreview}>
+              <Sparkles className="h-4 w-4" />
               {all.length === 0 ? "Cargar catálogo Apple" : "Sumar modelos nuevos"}
             </button>
           )}
@@ -119,8 +113,8 @@ export default function Catalog() {
           }
           action={
             all.length === 0 ? (
-              <button className="btn-primary" onClick={runSeed} disabled={seeding}>
-                {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <button className="btn-primary" onClick={openPreview}>
+                <Sparkles className="h-4 w-4" />
                 Cargar catálogo Apple
               </button>
             ) : (
@@ -198,6 +192,16 @@ export default function Catalog() {
         />
       )}
 
+      {previewOpen && (
+        <SeedPreviewModal
+          onClose={() => setPreviewOpen(false)}
+          onDone={(msg) => {
+            setSeedMsg(msg);
+            setPreviewOpen(false);
+          }}
+        />
+      )}
+
       <Modal
         open={!!toDelete}
         onClose={() => setToDelete(null)}
@@ -221,6 +225,173 @@ export default function Catalog() {
         </p>
       </Modal>
     </div>
+  );
+}
+
+/* ──────────────────── Vista previa del catálogo oficial ──────────────────── */
+
+/**
+ * Muestra los modelos que se van a crear; se pueden quitar los que no se
+ * quieren (uno por uno o una categoría entera) y recién al Aceptar se graban.
+ */
+function SeedPreviewModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: (msg: string) => void;
+}) {
+  const preview = useQuery(api.catalog.previewSeed, {});
+  const seed = useMutation(api.catalog.seed);
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Misma clave que usa el backend para identificar cada modelo.
+  const keyOf = (m: { category: string; name: string }) => `${m.category}|${m.name}`;
+  const total = preview?.items.length ?? 0;
+  const visible = (preview?.items ?? []).filter((m) => !removed.has(keyOf(m)));
+  const count = visible.length;
+
+  const remove = (keys: string[]) =>
+    setRemoved((r) => new Set([...r, ...keys]));
+
+  async function accept() {
+    setSaving(true);
+    setError(null);
+    try {
+      onDone(await seed({ only: visible.map(keyOf) }));
+    } catch (err) {
+      setError(
+        err instanceof ConvexError
+          ? String(err.data)
+          : err instanceof Error
+            ? err.message
+            : "No se pudo cargar el catálogo.",
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={preview?.full === false ? "Sumar modelos nuevos" : "Cargar catálogo Apple"}
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose} type="button">
+            {total > 0 ? "Cancelar" : "Cerrar"}
+          </button>
+          {total > 0 && (
+            <button
+              className="btn-primary"
+              onClick={accept}
+              disabled={saving || count === 0}
+              type="button"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Aceptar y crear {count} {count === 1 ? "modelo" : "modelos"}
+            </button>
+          )}
+        </>
+      }
+    >
+      {preview === undefined ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-ink-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Armando la vista previa…
+        </div>
+      ) : total === 0 ? (
+        <p className="text-sm text-ink-600">
+          El catálogo ya está al día: no hay modelos nuevos de Apple para agregar.
+        </p>
+      ) : (
+        <div className="space-y-5">
+          {error && (
+            <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
+          )}
+          <p className="text-sm text-ink-600">
+            Se van a crear <strong className="text-ink-900">{count}</strong>{" "}
+            {count === 1 ? "modelo" : "modelos"} con sus colores y capacidades. Quitá los que no
+            quieras y tocá <strong className="text-ink-900">Aceptar</strong> para grabar el resto.
+            {!preview.full && " Los modelos que ya tenés no se tocan."}
+          </p>
+          {removed.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-ink-50 px-3.5 py-2.5 text-sm text-ink-600">
+              <span>
+                Quitaste {removed.size} {removed.size === 1 ? "modelo" : "modelos"}.
+              </span>
+              <button
+                type="button"
+                className="btn-ghost px-2.5 py-1 text-xs"
+                onClick={() => setRemoved(new Set())}
+              >
+                Volver a mostrar todos
+              </button>
+            </div>
+          )}
+          {CATALOG_CATEGORIES.map((c) => {
+            const items = visible.filter((m) => m.category === c);
+            if (items.length === 0) return null;
+            const meta = CATEGORIES[c];
+            return (
+              <section key={c}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <meta.icon className="h-3.5 w-3.5" />
+                    {meta.plural} · {items.length}
+                  </h4>
+                  <button
+                    type="button"
+                    className="btn-ghost px-2.5 py-1 text-xs"
+                    onClick={() => remove(items.map(keyOf))}
+                  >
+                    Quitar todos
+                  </button>
+                </div>
+                <div className="divide-y divide-ink-100 rounded-xl border border-ink-100">
+                  {/* Más nuevos primero, como en el listado. */}
+                  {[...items].reverse().map((m) => (
+                    <div key={m.name} className="flex items-start justify-between gap-3 px-3.5 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink-900">{m.name}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {m.colors.map((color) => (
+                            <Badge key={color} className="bg-ink-100 text-ink-700">
+                              <ColorDot color={color} />
+                              {color}
+                            </Badge>
+                          ))}
+                        </div>
+                        {m.storages.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {m.storages.map((s) => (
+                              <Badge key={s} className="bg-brand-50 text-brand-700">
+                                {s}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-lg p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => remove([keyOf(m)])}
+                        aria-label={`Quitar ${m.name}`}
+                        title="Quitar (no se crea)"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
   );
 }
 

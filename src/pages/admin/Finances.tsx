@@ -16,6 +16,7 @@ import { StatCard, FullPageLoader } from "../../components/ui";
 import { useCurrency } from "../../lib/useCurrency";
 import { useTheme } from "../../lib/theme";
 import { Period, PERIODS, periodFrom } from "../../lib/periods";
+import PeriodTabs from "../../components/PeriodTabs";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -39,21 +40,7 @@ export default function Finances() {
   return (
     <div className="space-y-6">
       {/* Selector de período */}
-      <div className="flex flex-wrap gap-2">
-        {PERIODS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              period === p.key
-                ? "bg-ink-900 text-ink-50"
-                : "bg-surface text-ink-600 border border-ink-200 hover:border-ink-300"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <PeriodTabs value={period} onChange={setPeriod} />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

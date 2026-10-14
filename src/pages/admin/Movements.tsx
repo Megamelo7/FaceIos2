@@ -7,10 +7,12 @@ import TransactionModal from "../../components/TransactionModal";
 import ProductFormModal from "../../components/ProductFormModal";
 import SaleWarranty from "../../components/SaleWarranty";
 import SaleImei from "../../components/SaleImei";
+import SaleReceiptModal from "../../components/SaleReceiptModal";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
-import { Period, PERIODS, periodFrom } from "../../lib/periods";
+import { Period, periodFrom } from "../../lib/periods";
+import PeriodTabs from "../../components/PeriodTabs";
 import {
   Plus,
   ShoppingCart,
@@ -22,6 +24,7 @@ import {
   Loader2,
   ArrowDownLeft,
   ArrowUpRight,
+  FileText,
 } from "lucide-react";
 
 /** Estado vacío según el filtro elegido: texto y botón del mismo tipo. */
@@ -41,6 +44,8 @@ export default function Movements() {
   const [period, setPeriod] = useState<Period>("mes");
   const [modalType, setModalType] = useState<TxType | null>(null);
   const [toDelete, setToDelete] = useState<Id<"transactions"> | null>(null);
+  // Venta de la que se abre el comprobante.
+  const [receiptFor, setReceiptFor] = useState<Id<"transactions"> | null>(null);
   const [deleting, setDeleting] = useState(false);
   // Compra de un producto NUEVO: abre el formulario de producto con todos los combos.
   const [newProductOpen, setNewProductOpen] = useState(false);
@@ -95,23 +100,19 @@ export default function Movements() {
         </span>
       </p>
 
-      {/* Filtros: período y tipo */}
-      <div className="flex flex-wrap gap-2">
-        {PERIODS.map((p) => (
-          <FilterChip key={p.key} active={period === p.key} onClick={() => setPeriod(p.key)}>
-            {p.label}
+      {/* Filtros: tipo (chips) a la izquierda y período a la derecha */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
+            Todos
           </FilterChip>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
-          Todos
-        </FilterChip>
-        {(Object.keys(TX_META) as TxType[]).map((t) => (
-          <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)}>
-            {TX_META[t].label}
-          </FilterChip>
-        ))}
+          {(Object.keys(TX_META) as TxType[]).map((t) => (
+            <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)}>
+              {TX_META[t].label}
+            </FilterChip>
+          ))}
+        </div>
+        <PeriodTabs value={period} onChange={setPeriod} />
       </div>
 
       {/* Tabla */}
@@ -229,7 +230,16 @@ export default function Movements() {
                           "—"
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {t.type === "venta" && (
+                          <button
+                            className="rounded-lg p-2 text-ink-400 hover:bg-brand-50 hover:text-brand-600"
+                            onClick={() => setReceiptFor(t._id)}
+                            title="Comprobante (descargar / enviar por WhatsApp)"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600"
                           onClick={() => setToDelete(t._id)}
@@ -248,6 +258,10 @@ export default function Movements() {
             {txs.length} movimiento{txs.length !== 1 ? "s" : ""}
           </div>
         </div>
+      )}
+
+      {receiptFor && (
+        <SaleReceiptModal saleId={receiptFor} onClose={() => setReceiptFor(null)} />
       )}
 
       {modalType && (

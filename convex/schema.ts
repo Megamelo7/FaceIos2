@@ -126,10 +126,14 @@ export default defineSchema({
     warrantyDays: v.optional(v.number()),
     warrantyStart: v.optional(v.number()),
     warrantyEnd: v.optional(v.number()),
+    // N° del comprobante de venta (correlativo). Los artículos de una misma
+    // venta comparten el número; las ventas anteriores a este campo no tienen.
+    receiptNumber: v.optional(v.number()),
   })
     .index("by_type", ["type"])
     .index("by_date", ["date"])
-    .index("by_customer", ["customerId"]),
+    .index("by_customer", ["customerId"])
+    .index("by_receipt", ["receiptNumber"]),
 
   /** Clientes: datos básicos para asociar a las ventas. */
   customers: defineTable({
@@ -178,5 +182,7 @@ export default defineSchema({
     appVersion: v.optional(v.string()),
     // Días de garantía que se sugieren al vender un equipo usado (Ajustes → Garantías).
     warrantyDays: v.optional(v.number()),
+    // Condiciones de garantía que se imprimen al pie del comprobante de venta.
+    warrantyTerms: v.optional(v.string()),
   }).index("by_key", ["key"]),
 });

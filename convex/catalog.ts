@@ -1,6 +1,7 @@
 import { v, ConvexError } from "convex/values";
-import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { query, mutation, internalMutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { Doc } from "./_generated/dataModel";
 import { APPLE_CATALOG } from "./catalogData";
 
 /**
@@ -98,47 +99,80 @@ export const remove = mutation({
 });
 
 /**
- * Carga el catálogo oficial de Apple. Si ya hay modelos, sólo suma los
- * lanzamientos posteriores al último que tenga cada categoría (no revive los
- * que se borraron ni toca los editados). Con `force: true` borra y recarga.
- *   npx convex run catalog:seed
- *   npx convex run catalog:seed --prod
+ * Modelos del catálogo oficial de Apple que faltan cargar: todos si el
+ * catálogo está vacío; si no, sólo los lanzamientos posteriores al último que
+ * tenga cada categoría (no revive los que se borraron ni toca los editados).
  */
+/** Identifica un modelo del catálogo oficial (el front usa la misma clave). */
+const catalogKey = (e: { category: string; name: string }) => `${e.category}|${e.name}`;
+
+function pendingOfficial(existing: Doc<"deviceModels">[]) {
+  if (existing.length === 0) return { full: true, items: APPLE_CATALOG };
+  const key = catalogKey;
+  const present = new Set(existing.map(key));
+  const lastIdx = new Map<string, number>();
+  APPLE_CATALOG.forEach((e, i) => {
+    if (present.has(key(e))) lastIdx.set(e.category, i);
+  });
+  const items = APPLE_CATALOG.filter((e, i) => {
+    const last = lastIdx.get(e.category);
+    return last !== undefined && i > last && !present.has(key(e));
+  });
+  return { full: false, items };
+}
+
+/**
+ * Graba los modelos que faltan (o sólo los de `only`, las claves que quedaron
+ * en la vista previa) y devuelve el mensaje para mostrar.
+ */
+async function insertPending(ctx: MutationCtx, only?: string[]): Promise<string> {
+  const existing = await ctx.db.query("deviceModels").collect();
+  const { full, items: pending } = pendingOfficial(existing);
+  if (pending.length === 0) return "El catálogo ya está al día.";
+  const picked = only ? new Set(only) : null;
+  const items = picked ? pending.filter((e) => picked.has(catalogKey(e))) : pending;
+  if (items.length === 0) return "No se agregó ningún modelo.";
+  let order = existing.reduce((m, d) => Math.max(m, d.order ?? 0), -1);
+  const now = Date.now();
+  for (const entry of items) {
+    await ctx.db.insert("deviceModels", { ...entry, order: ++order, createdAt: now });
+  }
+  return full
+    ? `✅ Catálogo Apple cargado: ${items.length} modelos.`
+    : `✅ Modelos nuevos agregados: ${items.map((e) => e.name).join(", ")}.`;
+}
+
+/** Vista previa de lo que va a crear `seed` (botón del panel). */
+export const previewSeed = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    return pendingOfficial(await ctx.db.query("deviceModels").collect());
+  },
+});
+
+/** Carga desde el panel (con la vista previa ya aceptada) los modelos oficiales que faltan. */
 export const seed = mutation({
+  // Claves "categoría|nombre" que quedaron en la vista previa (sin las que se quitaron).
+  args: { only: v.optional(v.array(v.string())) },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    return await insertPending(ctx, args.only);
+  },
+});
+
+/**
+ * Lo mismo por CLI (sin login). Con `force: true` borra el catálogo y lo
+ * recarga entero (se pierden los modelos editados o agregados a mano).
+ *   npx convex run catalog:seedCli
+ *   npx convex run catalog:seedCli '{"force": true}' --prod
+ */
+export const seedCli = internalMutation({
   args: { force: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query("deviceModels").collect();
-    if (existing.length > 0 && !args.force) {
-      const key = (e: { category: string; name: string }) => `${e.category}|${e.name}`;
-      const present = new Set(existing.map(key));
-      const lastIdx = new Map<string, number>();
-      APPLE_CATALOG.forEach((e, i) => {
-        if (present.has(key(e))) lastIdx.set(e.category, i);
-      });
-      const toAdd = APPLE_CATALOG.filter((e, i) => {
-        const last = lastIdx.get(e.category);
-        return last !== undefined && i > last && !present.has(key(e));
-      });
-      if (toAdd.length === 0) return "El catálogo ya está al día.";
-      let order = existing.reduce((m, d) => Math.max(m, d.order ?? 0), 0);
-      const now = Date.now();
-      for (const entry of toAdd) {
-        await ctx.db.insert("deviceModels", { ...entry, order: ++order, createdAt: now });
-      }
-      return `✅ Modelos nuevos agregados: ${toAdd.map((e) => e.name).join(", ")}.`;
-    }
     if (args.force) {
       for (const d of await ctx.db.query("deviceModels").collect()) await ctx.db.delete(d._id);
     }
-    const now = Date.now();
-    let i = 0;
-    for (const entry of APPLE_CATALOG) {
-      await ctx.db.insert("deviceModels", {
-        ...entry,
-        order: i++,
-        createdAt: now,
-      });
-    }
-    return `✅ Catálogo Apple cargado: ${APPLE_CATALOG.length} modelos.`;
+    return await insertPending(ctx);
   },
 });

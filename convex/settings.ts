@@ -17,7 +17,7 @@ const DEFAULTS = {
 };
 
 /** Config guardada + la URL del logo resuelta desde el storage. */
-async function readSettings(ctx: QueryCtx) {
+export async function readSettings(ctx: QueryCtx) {
   const doc = await ctx.db
     .query("settings")
     .withIndex("by_key", (q) => q.eq("key", KEY))
@@ -52,6 +52,8 @@ export const update = mutation({
     currency: v.optional(v.string()),
     heroTitle: v.optional(v.string()),
     heroSubtitle: v.optional(v.string()),
+    // Condiciones de garantía del comprobante de venta.
+    warrantyTerms: v.optional(v.string()),
     // Garantía de usados en días; `null` la deja sin configurar.
     warrantyDays: v.optional(v.union(v.number(), v.null())),
   },
