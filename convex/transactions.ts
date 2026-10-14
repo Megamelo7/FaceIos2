@@ -3,7 +3,7 @@ import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { normalizePhone, normalizeEmail } from "./customers";
-import { usedWarrantyDays } from "./settings";
+import { usedWarrantyDays, readSettings } from "./settings";
 import { withProductInfo } from "./saleImei";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -170,7 +170,19 @@ type SaleCustomer = {
   customerContact?: string;
 };
 
-/** Resuelve el cliente: existente, o lo crea (reutiliza si el teléfono ya existe). */
+/** Nombre para comparar: sin tildes, mayúsculas ni espacios de más. */
+const comparableName = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Resuelve el cliente: existente, o lo crea. Si el teléfono/email del nuevo ya
+ * es de un cliente con el mismo nombre, usa ese; si es de otro, frena la venta.
+ */
 async function resolveSaleCustomer(ctx: MutationCtx, args: SaleShared): Promise<SaleCustomer> {
   let customerId = args.customerId;
   let customerName = args.customerName;
@@ -180,21 +192,39 @@ async function resolveSaleCustomer(ctx: MutationCtx, args: SaleShared): Promise<
     if (!name) throw new Error("El nombre del cliente es obligatorio.");
     const phone = normalizePhone(args.newCustomer.phone);
     const email = normalizeEmail(args.newCustomer.email);
-    const existing = phone
+    const byPhone = phone
       ? await ctx.db
           .query("customers")
           .withIndex("by_phone", (q) => q.eq("phone", phone))
           .first()
       : null;
-    customerId = existing
-      ? existing._id
-      : await ctx.db.insert("customers", {
-          name,
-          phone,
-          email,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
+    const byEmail =
+      !byPhone && email
+        ? await ctx.db
+            .query("customers")
+            .withIndex("by_email", (q) => q.eq("email", email))
+            .first()
+        : null;
+    const existing = byPhone ?? byEmail;
+    if (existing) {
+      // Teléfono/email únicos (como en Clientes): si es la misma persona se
+      // vincula; si el nombre es otro, no se le asigna la venta en silencio.
+      if (comparableName(existing.name) !== comparableName(name)) {
+        const field = byPhone ? "teléfono" : "email";
+        throw new ConvexError(
+          `Ya existe un cliente con ese ${field}: ${existing.name}. Elegilo de la lista o cargá otro ${field}.`,
+        );
+      }
+      customerId = existing._id;
+    } else {
+      customerId = await ctx.db.insert("customers", {
+        name,
+        phone,
+        email,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
   }
   if (customerId) {
     const c = await ctx.db.get(customerId);
@@ -206,6 +236,12 @@ async function resolveSaleCustomer(ctx: MutationCtx, args: SaleShared): Promise<
   return { customerId, customerName, customerContact };
 }
 
+/** Próximo N° de comprobante de venta (correlativo). */
+async function nextReceiptNumber(ctx: MutationCtx): Promise<number> {
+  const last = await ctx.db.query("transactions").withIndex("by_receipt").order("desc").first();
+  return (last?.receiptNumber ?? 0) + 1;
+}
+
 /** Graba un artículo vendido: descuenta stock y calcula la ganancia. */
 async function insertSale(
   ctx: MutationCtx,
@@ -213,6 +249,7 @@ async function insertSale(
   item: SaleItem,
   shared: SaleShared,
   customer: SaleCustomer,
+  receiptNumber: number,
 ) {
   if (item.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
 
@@ -269,6 +306,7 @@ async function insertSale(
     createdAt: Date.now(),
     ...fxFields(amount, shared.fxRate, item.fxAmount),
     ...warranty,
+    receiptNumber,
   });
 }
 
@@ -278,7 +316,7 @@ export const recordSale = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     const customer = await resolveSaleCustomer(ctx, args);
-    return await insertSale(ctx, userId, args, args, customer);
+    return await insertSale(ctx, userId, args, args, customer, await nextReceiptNumber(ctx));
   },
 });
 
@@ -294,9 +332,84 @@ export const recordSales = mutation({
     if (args.items.length === 0) throw new Error("Agregá al menos un artículo.");
     const { items, ...shared } = args;
     const customer = await resolveSaleCustomer(ctx, shared);
+    // Un solo comprobante para todos los artículos de la venta.
+    const receiptNumber = await nextReceiptNumber(ctx);
     const ids: Id<"transactions">[] = [];
-    for (const item of items) ids.push(await insertSale(ctx, userId, item, shared, customer));
+    for (const item of items) {
+      ids.push(await insertSale(ctx, userId, item, shared, customer, receiptNumber));
+    }
     return ids;
+  },
+});
+
+/**
+ * Datos del comprobante de una venta: todos los artículos de la operación
+ * (mismo N°), cliente, pago y los datos de la tienda (logo, contacto y
+ * condiciones de garantía).
+ */
+export const receipt = query({
+  args: { id: v.id("transactions") },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    const tx = await ctx.db.get(args.id);
+    if (!tx || tx.type !== "venta") throw new ConvexError("Venta no encontrada.");
+    const sales =
+      tx.receiptNumber === undefined
+        ? [tx]
+        : (
+            await ctx.db
+              .query("transactions")
+              .withIndex("by_receipt", (q) => q.eq("receiptNumber", tx.receiptNumber))
+              .collect()
+          ).filter((t) => t.type === "venta");
+    const items = await Promise.all(
+      (await withProductInfo(ctx, sales)).map(async (t) => {
+        const product = t.productId ? await ctx.db.get(t.productId) : null;
+        return {
+          _id: t._id,
+          name: t.productName ?? "Artículo",
+          category: t.category,
+          color: t.productColor,
+          storage: product?.storage,
+          condition: product?.condition,
+          batteryHealth: product?.batteryHealth,
+          imei: t.imei,
+          quantity: t.quantity ?? 1,
+          unitPrice: t.unitPrice ?? t.amount,
+          amount: t.amount,
+          fxAmount: t.fxAmount,
+          warrantyType: t.warrantyType,
+          warrantyStart: t.warrantyStart,
+          warrantyEnd: t.warrantyEnd,
+          warrantyDays: t.warrantyDays,
+        };
+      }),
+    );
+    const store = await readSettings(ctx);
+    const inArs = items.every((i) => i.fxAmount !== undefined);
+    return {
+      number: tx.receiptNumber ?? null,
+      date: tx.date,
+      customerName: tx.customerName,
+      customerContact: tx.customerContact,
+      paymentMethod: tx.paymentMethod,
+      notes: tx.notes,
+      items,
+      total: items.reduce((s, i) => s + i.amount, 0),
+      // Cargada en pesos: total original en ARS y cotización.
+      totalArs: inArs ? items.reduce((s, i) => s + (i.fxAmount ?? 0), 0) : undefined,
+      fxRate: inArs ? tx.fxRate : undefined,
+      store: {
+        name: store.storeName,
+        address: store.address,
+        whatsapp: store.whatsapp,
+        email: store.email,
+        instagram: store.instagram,
+        currency: store.currency,
+        logoUrl: store.logoUrl,
+        warrantyTerms: store.warrantyTerms,
+      },
+    };
   },
 });
 

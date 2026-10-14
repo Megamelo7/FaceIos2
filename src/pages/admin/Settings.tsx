@@ -24,6 +24,7 @@ export default function Settings() {
     heroTitle: "",
     heroSubtitle: "",
     warrantyDays: "",
+    warrantyTerms: "",
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -45,6 +46,7 @@ export default function Settings() {
         heroTitle: settings.heroTitle ?? "",
         heroSubtitle: settings.heroSubtitle ?? "",
         warrantyDays: settings.warrantyDays?.toString() ?? "",
+        warrantyTerms: settings.warrantyTerms ?? "",
       });
     }
   }, [settings]);
@@ -233,6 +235,18 @@ export default function Settings() {
               />
             </Field>
           </div>
+          <Field
+            className="mt-4"
+            label="Condiciones de garantía (comprobante)"
+            hint="Se imprimen al pie de cada comprobante de venta."
+          >
+            <textarea
+              className="input min-h-[90px] resize-y"
+              value={form.warrantyTerms}
+              onChange={(e) => set("warrantyTerms", e.target.value)}
+              placeholder="Ej: La garantía no cubre golpes, humedad, pantalla rota ni equipos abiertos por terceros. Para hacerla válida presentá este comprobante."
+            />
+          </Field>
         </div>
 
         <div className="mt-6 border-t border-ink-100 pt-5">

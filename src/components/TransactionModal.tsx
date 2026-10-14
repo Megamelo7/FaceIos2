@@ -18,6 +18,7 @@ import {
 import { warrantyTypeFor } from "../lib/warranty";
 import { useCurrency } from "../lib/useCurrency";
 import FxFields, { useFx, InputCurrency } from "./FxFields";
+import SaleReceiptModal from "./SaleReceiptModal";
 import { Loader2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
 type Props = {
@@ -100,6 +101,8 @@ export default function TransactionModal({
   const [date, setDate] = useState(toDateInputValue(Date.now()));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Venta ya registrada: se muestra su comprobante en lugar del formulario.
+  const [receiptFor, setReceiptFor] = useState<Id<"transactions"> | null>(null);
 
   const isSale = type === "venta";
   const isPurchase = type === "compra";
@@ -223,7 +226,7 @@ export default function TransactionModal({
                 : undefined,
           };
         });
-        await recordSales({
+        const ids = await recordSales({
           items,
           fxRate: fx.fxRate,
           paymentMethod: payment,
@@ -239,6 +242,10 @@ export default function TransactionModal({
           notes: notes.trim() || undefined,
           date: when,
         });
+        // Venta registrada: se pasa al comprobante para enviárselo al cliente.
+        setSaving(false);
+        setReceiptFor(ids[0]);
+        return;
       } else if (isPurchase) {
         const line = lines[0];
         const product = productById(line.productId);
@@ -278,6 +285,10 @@ export default function TransactionModal({
       );
       setSaving(false);
     }
+  }
+
+  if (receiptFor) {
+    return <SaleReceiptModal saleId={receiptFor} onClose={onClose} justRecorded />;
   }
 
   const titles: Record<TxType, string> = {

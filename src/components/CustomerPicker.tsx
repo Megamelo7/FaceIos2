@@ -23,6 +23,17 @@ export default function CustomerPicker({ value, onChange }: Props) {
   const [q, setQ] = useState("");
   const results = useQuery(api.customers.search, value === null ? { q } : "skip") ?? [];
 
+  // Cliente nuevo: si el teléfono o el email ya son de otro cliente, avisar
+  // (son únicos; la venta no se graba a nombre de otro).
+  const newData = value?.kind === "new" ? value.data : null;
+  const newPhone = (newData?.phone ?? "").trim().replace(/[\s().-]/g, "");
+  const newEmail = (newData?.email ?? "").trim().toLowerCase();
+  const dupQuery = newPhone.length >= 6 ? newPhone : newEmail.includes("@") ? newEmail : "";
+  const dupHits = useQuery(api.customers.search, dupQuery ? { q: dupQuery } : "skip");
+  const dup = dupHits?.find(
+    (c) => (newPhone.length >= 6 && c.phone === newPhone) || (!!newEmail && c.email === newEmail),
+  );
+
   if (value?.kind === "existing") {
     return (
       <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
@@ -82,6 +93,27 @@ export default function CustomerPicker({ value, onChange }: Props) {
             onChange={(e) => set("email", e.target.value)}
           />
         </div>
+        {dup && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <span>
+              Ese {newPhone.length >= 6 && dup.phone === newPhone ? "teléfono" : "email"} ya es de{" "}
+              <strong>{dup.name}</strong>.
+            </span>
+            <button
+              type="button"
+              className="font-semibold hover:underline"
+              onClick={() =>
+                onChange({
+                  kind: "existing",
+                  id: dup._id,
+                  label: [dup.name, dup.phone].filter(Boolean).join(" · "),
+                })
+              }
+            >
+              Usar ese cliente
+            </button>
+          </div>
+        )}
       </div>
     );
   }
