@@ -61,6 +61,8 @@ const productFields = {
   featured: v.optional(v.boolean()),
   images: imagesValidator,
   description: v.optional(v.string()),
+  // Usado con garantía Apple vigente: hasta cuándo.
+  appleWarrantyEnd: v.optional(v.number()),
 };
 
 /** Datos opcionales de la compra inicial (cuando se carga desde Movimientos → Compra). */
@@ -399,6 +401,8 @@ export const update = mutation({
     featured: v.optional(v.boolean()),
     images: imagesValidator,
     description: v.optional(v.string()),
+    // Garantía Apple vigente (usados); `null` la quita.
+    appleWarrantyEnd: v.optional(v.union(v.number(), v.null())),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
@@ -421,6 +425,9 @@ export const update = mutation({
       if (value !== undefined) (patch as Record<string, unknown>)[key] = value;
     }
     if (args.imei !== undefined) patch.imei = args.imei.trim() || undefined;
+    if (args.appleWarrantyEnd !== undefined) {
+      patch.appleWarrantyEnd = args.appleWarrantyEnd ?? undefined;
+    }
     await ctx.db.patch(id, patch);
     return id;
   },

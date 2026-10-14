@@ -234,7 +234,8 @@ export default function Landing() {
             ))}
           </div>
         ) : byCategory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-black/15 py-20 text-center text-black/55">
+          <div className="rounded-2xl border border-dashed border-black/15 px-4 pb-16 pt-8 text-center text-black/55">
+            <img src="/mascota.svg" alt="" className="mx-auto mb-2 h-36 w-36" />
             Todavía no hay productos publicados. Volvé pronto.
           </div>
         ) : (
@@ -269,30 +270,38 @@ export default function Landing() {
           className="relative scroll-mt-28 overflow-hidden rounded-[2rem] border border-black/10 bg-white px-6 py-12 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.35)] sm:px-10 sm:py-16"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_80%_at_50%_0%,rgba(99,102,241,0.12),transparent_70%)]" />
-          <div className="relative mx-auto max-w-2xl text-center">
-            <SectionEyebrow>Contacto</SectionEyebrow>
-            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-              ¿Querés saber el precio?
-            </h2>
-            <p className="mt-4 text-base leading-7 text-black/60">
-              Escribinos y te pasamos precio, disponibilidad y formas de pago al instante.
-            </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              {consultLink && (
-                <a href={consultLink} target="_blank" rel="noreferrer" className={`${accentBtn} px-6 py-3 text-base`}>
-                  Escribir por WhatsApp <MessageCircle className="h-4 w-4" />
-                </a>
-              )}
-              {settings?.instagram && (
-                <a
-                  href={`https://instagram.com/${settings.instagram}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={`${subtleBtn} px-6 py-3 text-base`}
-                >
-                  <Instagram className="h-4 w-4" /> @{settings.instagram}
-                </a>
-              )}
+          {/* Mascota: arriba en mobile, a la derecha del texto desde md. */}
+          <div className="relative mx-auto grid max-w-4xl items-center gap-4 md:grid-cols-[1fr_auto] md:gap-10">
+            <img
+              src="/mascota.svg"
+              alt=""
+              className="mx-auto h-44 w-44 motion-safe:animate-float md:order-last md:h-72 md:w-72"
+            />
+            <div className="text-center md:text-left">
+              <SectionEyebrow>Contacto</SectionEyebrow>
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+                ¿Querés saber el precio?
+              </h2>
+              <p className="mt-4 text-base leading-7 text-black/60">
+                Escribinos y te pasamos precio, disponibilidad y formas de pago al instante.
+              </p>
+              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row md:justify-start">
+                {consultLink && (
+                  <a href={consultLink} target="_blank" rel="noreferrer" className={`${accentBtn} px-6 py-3 text-base`}>
+                    Escribir por WhatsApp <MessageCircle className="h-4 w-4" />
+                  </a>
+                )}
+                {settings?.instagram && (
+                  <a
+                    href={`https://instagram.com/${settings.instagram}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${subtleBtn} px-6 py-3 text-base`}
+                  >
+                    <Instagram className="h-4 w-4" /> @{settings.instagram}
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -319,20 +328,27 @@ export default function Landing() {
         </div>
       </footer>
 
-      {/* WhatsApp flotante */}
+      {/* WhatsApp flotante, con la mascota asomándose por detrás */}
       {consultLink && (
-        <a
-          href={consultLink}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Consultar por WhatsApp"
-          className="fixed bottom-4 right-4 z-50 inline-flex items-center gap-3 rounded-full border border-black/10 bg-white/90 p-3 text-sm font-medium text-[#0B0B0F] shadow-[0_18px_45px_rgba(15,23,42,0.18)] backdrop-blur-xl transition-transform duration-200 hover:-translate-y-0.5 sm:bottom-5 sm:right-5 sm:px-4"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white">
-            <MessageCircle className="h-5 w-5" />
-          </span>
-          <span className="hidden sm:block">Consultar</span>
-        </a>
+        <div className="group fixed bottom-4 right-4 z-50 sm:bottom-5 sm:right-5">
+          <img
+            src="/mascota.svg"
+            alt=""
+            className="pointer-events-none absolute -right-2 -top-10 w-20 transition-transform duration-300 group-hover:-translate-y-2 sm:right-0 sm:-top-14 sm:w-28"
+          />
+          <a
+            href={consultLink}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Consultar por WhatsApp"
+            className="relative inline-flex items-center gap-3 rounded-full border border-black/10 bg-white p-3 text-sm font-medium text-[#0B0B0F] shadow-[0_18px_45px_rgba(15,23,42,0.18)] transition-transform duration-200 hover:-translate-y-0.5 sm:px-4"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white">
+              <MessageCircle className="h-5 w-5" />
+            </span>
+            <span className="hidden sm:block">Consultar</span>
+          </a>
+        </div>
       )}
     </main>
   );

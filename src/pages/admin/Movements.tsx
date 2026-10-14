@@ -5,6 +5,8 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { FullPageLoader, Badge, EmptyState, Modal } from "../../components/ui";
 import TransactionModal from "../../components/TransactionModal";
 import ProductFormModal from "../../components/ProductFormModal";
+import SaleWarranty from "../../components/SaleWarranty";
+import SaleImei from "../../components/SaleImei";
 import { useCurrency } from "../../lib/useCurrency";
 import { formatDate } from "../../lib/format";
 import { TX_META, TxType } from "../../lib/categories";
@@ -55,7 +57,7 @@ export default function Movements() {
     <div className="space-y-5">
       {/* Acciones */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <button className="btn-primary" onClick={() => setModalType("venta")}>
+        <button className="btn-secondary" onClick={() => setModalType("venta")}>
           <ShoppingCart className="h-4 w-4" /> Venta (− stock)
         </button>
         <button className="btn-secondary" onClick={() => setModalType("compra")}>
@@ -142,9 +144,11 @@ export default function Movements() {
                           {t.productName ?? "—"}
                           {t.quantity ? <span className="text-ink-400"> ×{t.quantity}</span> : ""}
                         </p>
+                        <SaleImei sale={t} />
                         {t.customerName && (
                           <p className="text-xs text-ink-400">Cliente: {t.customerName}</p>
                         )}
+                        <SaleWarranty sale={t} />
                         {t.notes && !t.customerName && (
                           <p className="truncate text-xs text-ink-400">{t.notes}</p>
                         )}

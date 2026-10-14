@@ -57,3 +57,13 @@ export function fromDateInputValue(value: string): number {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(y, m - 1, d, 12, 0, 0).getTime();
 }
+
+/** Suma días a un valor de <input type="date">. */
+export function addDaysToDateInput(value: string, days: number): string {
+  return toDateInputValue(fromDateInputValue(value) + days * 86_400_000);
+}
+
+/** Días entre dos valores de <input type="date"> (hasta − desde). */
+export function daysBetweenDateInputs(from: string, to: string): number {
+  return Math.round((fromDateInputValue(to) - fromDateInputValue(from)) / 86_400_000);
+}

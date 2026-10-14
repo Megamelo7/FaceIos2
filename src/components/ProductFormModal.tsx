@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { Modal, Field } from "./ui";
 import ImageUploader, { ImageItem } from "./ImageUploader";
+import DateInput from "./DateInput";
 import {
   CATEGORIES,
   CONDITIONS,
@@ -18,9 +19,11 @@ import {
   BatteryType,
   PAYMENT_METHODS,
 } from "../lib/categories";
-import { toDateInputValue, fromDateInputValue } from "../lib/format";
+import { toDateInputValue, fromDateInputValue, formatDate } from "../lib/format";
 import FxFields, { useFx, InputCurrency } from "./FxFields";
 import { isImeiFormat, normalizeImei, parseImeis } from "../lib/imei";
+import { WARRANTY_CATEGORIES } from "../lib/warranty";
+import ImeiCheck from "./ImeiCheck";
 import { Loader2 } from "lucide-react";
 
 /** Producto tal como lo devuelve `api.products.list` (con URLs de fotos resueltas). */
@@ -79,6 +82,8 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
       url: product?.imageUrls[i] ?? "",
     })) as ImageItem[],
     description: base?.description ?? "",
+    // Garantía Apple vigente (usados): propia de cada unidad, no se copia de la plantilla.
+    appleWarrantyEnd: product?.appleWarrantyEnd ? toDateInputValue(product.appleWarrantyEnd) : "",
   }));
   // Alta de iPhone / iPad: uno o varios IMEIs en un solo campo (uno por unidad).
   const [imeiText, setImeiText] = useState("");
@@ -142,6 +147,15 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
   const imeiListEmpty = multiImei && imeiList.length === 0;
   const imeiListInvalid = multiImei && imeiList.some((d) => d.length !== 15);
   const imeiListDup = multiImei && new Set(imeiList).size !== imeiList.length;
+  // Equipos usados / reacondicionados: pueden tener todavía garantía Apple.
+  const showAppleWarranty =
+    WARRANTY_CATEGORIES.includes(form.category) && form.condition !== "nuevo";
+  // IMEIs de 15 dígitos (sin repetir) con botón para consultarlos en IMEIpro.
+  const imeisToCheck = multiImei
+    ? [...new Set(imeiList.filter(isImeiFormat))]
+    : usesImei && isImeiFormat(form.imei)
+      ? [normalizeImei(form.imei)]
+      : [];
 
   function onChangeCategory(category: Category) {
     setForm((f) => ({ ...f, category, model: "", color: "", storage: "" }));
@@ -204,6 +218,9 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
       );
     if (imeiListDup) return setError("Hay IMEIs repetidos: cada unidad debe tener el suyo.");
     if (fx.error) return setError(fx.error);
+    if (isPurchase && !purchaseDate) {
+      return setError("Ingresá una fecha de compra válida (dd/mm/aaaa).");
+    }
     setSaving(true);
     try {
       const purchase = isPurchase
@@ -230,13 +247,23 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
         featured: form.featured,
         images: form.images.map((i) => i.id),
         description: form.description.trim() || undefined,
+        appleWarrantyEnd:
+          showAppleWarranty && form.appleWarrantyEnd
+            ? fromDateInputValue(form.appleWarrantyEnd)
+            : undefined,
       };
       const singleImei = usesImei
         ? normalizeImei(form.imei) || undefined
         : form.imei.trim() || undefined;
       if (isEdit && product) {
         // El stock no se edita acá: sólo cambia desde Movimientos.
-        await update({ id: product._id, ...payload, imei: singleImei });
+        await update({
+          id: product._id,
+          ...payload,
+          imei: singleImei,
+          // Vacío (o equipo nuevo) quita la garantía Apple cargada antes.
+          appleWarrantyEnd: payload.appleWarrantyEnd ?? null,
+        });
       } else if (multiImei) {
         // Un artículo por IMEI (1 unidad cada uno).
         if (imeiList.length === 1) {
@@ -534,6 +561,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
                       })}
                     </div>
                   )}
+                  <ImeiCheck imeis={imeisToCheck} />
                 </Field>
               ) : (
                 <Field
@@ -562,9 +590,28 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
                       El IMEI debe tener exactamente 15 dígitos.
                     </p>
                   )}
+                  <ImeiCheck imeis={imeisToCheck} />
                 </Field>
               )}
             </>
+          )}
+
+          {showAppleWarranty && (
+            <Field
+              label="Garantía Apple hasta"
+              hint="Si el usado todavía tiene garantía Apple, cargá hasta cuándo (figura en IMEIpro o en checkcoverage.apple.com). Al venderlo se registra como Garantía Apple; si queda vacío o ya venció, lleva la garantía de la tienda."
+            >
+              <DateInput
+                value={form.appleWarrantyEnd}
+                onChange={(v) => set("appleWarrantyEnd", v)}
+              />
+              {form.appleWarrantyEnd && form.appleWarrantyEnd < toDateInputValue(Date.now()) && (
+                <p className="mt-1.5 text-xs font-medium text-amber-700">
+                  Esa fecha ya pasó ({formatDate(fromDateInputValue(form.appleWarrantyEnd))}): al
+                  venderlo va a llevar la garantía de la tienda.
+                </p>
+              )}
+            </Field>
           )}
         </div>
 
@@ -685,12 +732,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
                 </select>
               </Field>
               <Field label="Fecha de compra">
-                <input
-                  className="input"
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                />
+                <DateInput value={purchaseDate} onChange={setPurchaseDate} />
               </Field>
             </div>
           </div>

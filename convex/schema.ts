@@ -58,6 +58,8 @@ export default defineSchema({
     ),
     // IMEI (15 dígitos) para iPhone/iPad; número de serie libre para notebooks.
     imei: v.optional(v.string()),
+    // Equipo usado que todavía tiene garantía Apple: hasta cuándo (se carga en la ficha).
+    appleWarrantyEnd: v.optional(v.number()),
     costPrice: v.number(),
     salePrice: v.number(),
     quantity: v.number(),
@@ -90,6 +92,8 @@ export default defineSchema({
     ),
     productId: v.optional(v.id("products")),
     productName: v.optional(v.string()),
+    // Ventas: IMEI (o N° de serie) del equipo vendido, guardado al vender.
+    imei: v.optional(v.string()),
     category: v.optional(v.string()),
     quantity: v.optional(v.number()),
     unitPrice: v.optional(v.number()),
@@ -112,6 +116,14 @@ export default defineSchema({
     fxCurrency: v.optional(v.string()),
     fxRate: v.optional(v.number()),
     fxAmount: v.optional(v.number()),
+    // Garantía (ventas de equipos): "apple" si es nuevo (sin fechas: la calcula
+    // Apple desde la activación) o si es un usado con garantía Apple vigente
+    // (hasta la fecha de su ficha); "tienda" si es usado sin garantía Apple:
+    // desde la fecha de venta y por los días de Ajustes (o el vencimiento editado).
+    warrantyType: v.optional(v.union(v.literal("apple"), v.literal("tienda"))),
+    warrantyDays: v.optional(v.number()),
+    warrantyStart: v.optional(v.number()),
+    warrantyEnd: v.optional(v.number()),
   })
     .index("by_type", ["type"])
     .index("by_date", ["date"])
@@ -162,5 +174,7 @@ export default defineSchema({
     logoId: v.optional(v.id("_storage")),
     // Versión del sistema que se muestra en el menú del panel (ej. "1.0.3").
     appVersion: v.optional(v.string()),
+    // Días de garantía que se sugieren al vender un equipo usado (Ajustes → Garantías).
+    warrantyDays: v.optional(v.number()),
   }).index("by_key", ["key"]),
 });
