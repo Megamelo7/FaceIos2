@@ -1,5 +1,61 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
+
+// Día en hora argentina (UTC−3, sin horario de verano).
+const localDay = (ts: number) => new Date(ts - 3 * 3_600_000).toISOString().slice(0, 10);
+
+/**
+ * Agrupa las ventas sin N° de comprobante en comprobantes, en orden
+ * cronológico (fecha de venta y orden de carga): las del mismo cliente en el
+ * mismo día comparten uno. Numera a partir de `last + 1`.
+ */
+export function planReceiptNumbers(sales: Doc<"transactions">[], last: number) {
+  const pending = sales
+    .filter((t) => t.type === "venta" && t.receiptNumber === undefined)
+    .sort((a, b) => a.date - b.date || a._creationTime - b._creationTime);
+  const groups = new Map<string, Doc<"transactions">[]>();
+  for (const t of pending) {
+    const who = t.customerId ?? (t.customerName?.trim().toLowerCase() || `sin-cliente:${t._id}`);
+    const key = `${localDay(t.date)}|${who}`;
+    groups.set(key, [...(groups.get(key) ?? []), t]);
+  }
+  return [...groups.values()].map((items, i) => ({ number: last + 1 + i, items }));
+}
+
+/**
+ * Numera los comprobantes de las ventas anteriores al N° (SÓLO por CLI), con
+ * `planReceiptNumbers`. Nunca cambia números ya asignados: sigue después del
+ * último. Sin `apply: true` sólo devuelve el plan.
+ *   npx convex run maintenance:numberOldReceipts --prod '{}'
+ *   npx convex run maintenance:numberOldReceipts --prod '{"apply": true}'
+ */
+export const numberOldReceipts = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const sales = await ctx.db
+      .query("transactions")
+      .withIndex("by_type", (q) => q.eq("type", "venta"))
+      .collect();
+    const last = sales.reduce((m, t) => Math.max(m, t.receiptNumber ?? 0), 0);
+    const plan = planReceiptNumbers(sales, last);
+    if (args.apply) {
+      for (const { number, items } of plan) {
+        for (const t of items) await ctx.db.patch(t._id, { receiptNumber: number });
+      }
+    }
+    return {
+      aplicado: !!args.apply,
+      comprobantes: plan.length,
+      plan: plan.map(({ number, items }) => ({
+        numero: String(number).padStart(6, "0"),
+        dia: localDay(items[0].date),
+        cliente: items[0].customerName ?? "(sin cliente)",
+        articulos: items.map((t) => t.productName ?? "Artículo"),
+      })),
+    };
+  },
+});
 
 /**
  * Limpieza de datos (SÓLO por CLI; no es accesible desde la web).
