@@ -627,6 +627,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
               <input
                 className="input"
                 type="number"
+                step="any"
                 value={form.costPrice}
                 onChange={(e) => set("costPrice", e.target.value)}
                 placeholder="0"
@@ -636,6 +637,7 @@ export default function ProductFormModal({ open, onClose, product, mode, templat
               <input
                 className="input"
                 type="number"
+                step="any"
                 value={form.salePrice}
                 onChange={(e) => set("salePrice", e.target.value)}
                 placeholder="0"

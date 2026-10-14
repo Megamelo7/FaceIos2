@@ -98,17 +98,34 @@ export const remove = mutation({
 });
 
 /**
- * Carga el catálogo oficial de Apple. Idempotente: no hace nada si ya hay
- * modelos, salvo con `force: true` (borra y recarga).
+ * Carga el catálogo oficial de Apple. Si ya hay modelos, sólo suma los
+ * lanzamientos posteriores al último que tenga cada categoría (no revive los
+ * que se borraron ni toca los editados). Con `force: true` borra y recarga.
  *   npx convex run catalog:seed
  *   npx convex run catalog:seed --prod
  */
 export const seed = mutation({
   args: { force: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query("deviceModels").take(1);
+    const existing = await ctx.db.query("deviceModels").collect();
     if (existing.length > 0 && !args.force) {
-      return "El catálogo ya tiene modelos. Usá {\"force\": true} para recargar.";
+      const key = (e: { category: string; name: string }) => `${e.category}|${e.name}`;
+      const present = new Set(existing.map(key));
+      const lastIdx = new Map<string, number>();
+      APPLE_CATALOG.forEach((e, i) => {
+        if (present.has(key(e))) lastIdx.set(e.category, i);
+      });
+      const toAdd = APPLE_CATALOG.filter((e, i) => {
+        const last = lastIdx.get(e.category);
+        return last !== undefined && i > last && !present.has(key(e));
+      });
+      if (toAdd.length === 0) return "El catálogo ya está al día.";
+      let order = existing.reduce((m, d) => Math.max(m, d.order ?? 0), 0);
+      const now = Date.now();
+      for (const entry of toAdd) {
+        await ctx.db.insert("deviceModels", { ...entry, order: ++order, createdAt: now });
+      }
+      return `✅ Modelos nuevos agregados: ${toAdd.map((e) => e.name).join(", ")}.`;
     }
     if (args.force) {
       for (const d of await ctx.db.query("deviceModels").collect()) await ctx.db.delete(d._id);

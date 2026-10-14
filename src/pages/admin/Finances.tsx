@@ -40,7 +40,7 @@ function periodFrom(period: Period): number | undefined {
 }
 
 export default function Finances() {
-  const [period, setPeriod] = useState<Period>("6m");
+  const [period, setPeriod] = useState<Period>("mes");
   const { money, moneyShort } = useCurrency();
   const { isDark } = useTheme();
 

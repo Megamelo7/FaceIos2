@@ -59,10 +59,10 @@ export default function Catalog() {
           combos. Accesorios y otros se cargan a mano.
         </p>
         <div className="flex shrink-0 gap-2">
-          {all && all.length === 0 && (
+          {all && (
             <button className="btn-secondary" onClick={runSeed} disabled={seeding}>
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Cargar catálogo Apple
+              {all.length === 0 ? "Cargar catálogo Apple" : "Sumar modelos nuevos"}
             </button>
           )}
           <button

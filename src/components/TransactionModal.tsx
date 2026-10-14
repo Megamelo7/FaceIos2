@@ -310,6 +310,7 @@ export default function TransactionModal({
                 <input
                   className="input"
                   type="number"
+                  step="any"
                   value={unitValue}
                   onChange={(e) => setUnitValue(e.target.value)}
                 />
@@ -343,6 +344,7 @@ export default function TransactionModal({
               <input
                 className="input"
                 type="number"
+                step="any"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
